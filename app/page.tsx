@@ -1,273 +1,217 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, Bot, Package, X, Cpu, HardHat, Zap, Trash2, User, Phone, MapPin, Receipt, CreditCard, Sun, Moon, Building } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { motion, AnimatePresence } from "framer-motion";
 
-const content: any = {
-  EN: { hero: "Build with Iron Will.", sub: "Premium supplies for Ethiopia's projects." },
-  AMH: { hero: "በጥንካሬ ይገንቡ።", sub: "ለኢትዮጵያ ፕሮጀክቶች ዋና አቅርቦቶች።" },
-  CN: { hero: "以钢铁意志建设。", sub: "为埃塞俄比亚项目提供优质供应。" }
-};
-
-const themes = {
-  orange: { text: 'text-orange-500', bg: 'bg-orange-500', border: 'border-orange-500/20', hover: 'hover:bg-orange-500', fill: 'bg-orange-500/10' },
-  blue: { text: 'text-blue-500', bg: 'bg-blue-500', border: 'border-blue-500/20', hover: 'hover:bg-blue-500', fill: 'bg-blue-500/10' },
-  green: { text: 'text-green-500', bg: 'bg-green-500', border: 'border-green-500/20', hover: 'hover:bg-green-500', fill: 'bg-green-500/10' }
-};
-
-export default function ClientHome() {
-  const [lang, setLang] = useState('EN');
+export default function ClientUI() {
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<any[]>([]);
-  const [showCheckout, setShowCheckout] = useState(false);
-  const [isReceipt, setIsReceipt] = useState(true);
-  const [isProcessingPay, setIsProcessingPay] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   
-  // NEW: Dark/Light Mode State
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  
-  // NEW: Added Company to client data
-  const [clientData, setClientData] = useState({ name: '', company: '', phone: '', address: '', tin: '' });
-  
-  const [themeName, setThemeName] = useState<'orange' | 'blue' | 'green'>('orange');
-  const [layout, setLayout] = useState('grid');
-  const [showAiModal, setShowAiModal] = useState(false);
-  
-  const [sqm, setSqm] = useState(0);
-  const [projectType, setProjectType] = useState("Villa");
-  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  // Floating AI System state
+  const [isAiOpen, setIsAiOpen] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLog, setAiLog] = useState<any[]>([
+    { sender: "ai", text: "Welcome to AmanZone Trading PLC Node. How can I facilitate your raw material acquisitions today?" }
+  ]);
 
+  // Establish continuous hot collection synchronizer
   useEffect(() => {
-    fetch('/api/inventory').then(res => res.json()).then(data => setProducts(Array.isArray(data) ? data : []));
-    const savedTheme = localStorage.getItem('az_theme') as 'orange' | 'blue' | 'green';
-    const savedLayout = localStorage.getItem('az_layout');
-    const savedMode = localStorage.getItem('az_mode');
-    
-    if (savedTheme) setThemeName(savedTheme);
-    if (savedLayout) setLayout(savedLayout);
-    if (savedMode === 'light') setIsDarkMode(false);
+    const unsub = onSnapshot(collection(db, "products"), (snapshot) => {
+      const liveData = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setProducts(liveData);
+    });
+    return () => unsub();
   }, []);
 
-  const toggleMode = () => {
-    setIsDarkMode(!isDarkMode);
-    localStorage.setItem('az_mode', !isDarkMode ? 'dark' : 'light');
-  };
-
-  const t = themes[themeName];
-
-  // Cart Functions
   const addToCart = (product: any) => {
-    setCart(prev => {
-      const exists = prev.find(item => item.id === product.id);
-      if (exists) return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+    setCart((prev) => {
+      const exist = prev.find((item) => item.id === product.id);
+      if (exist) {
+        return prev.map((item) => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
+      }
       return [...prev, { ...product, qty: 1 }];
     });
+    setIsCartOpen(true);
   };
 
-  // NEW: Manual Quantity Typing
-  const setExactQty = (id: string, val: string) => {
-    const newQty = parseInt(val);
-    if (isNaN(newQty) || newQty < 1) return;
-    setCart(prev => prev.map(item => item.id === id ? { ...item, qty: newQty } : item));
-  };
-  
-  const updateQty = (id: string, delta: number) => setCart(prev => prev.map(item => item.id === id ? { ...item, qty: Math.max(1, item.qty + delta) } : item));
-  const removeFromCart = (id: string) => setCart(prev => prev.filter(item => item.id !== id));
-
-  const subtotal = cart.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0);
-  const vat = isReceipt ? subtotal * 0.15 : 0;
-  const grandTotal = subtotal + vat;
-
-  const submitOrder = async (type: 'OFFICIAL' | 'DRAFT') => {
-    if (cart.length === 0) return alert("Your cart is empty!");
-    if (!clientData.name || !clientData.phone) return alert("Please provide your Name and Phone Number.");
-
-    const orderPayload = { items: cart, subtotal, vat, total: grandTotal, type, client: clientData };
-
-    if (type === 'DRAFT') {
-      const res = await fetch('/api/orders', { method: 'POST', body: JSON.stringify(orderPayload) });
-      if (res.ok) { alert("Draft sent to Admin Desk!"); setCart([]); setShowCheckout(false); }
-    } else {
-      setIsProcessingPay(true);
-      try {
-        const res = await fetch('/api/checkout', { method: 'POST', body: JSON.stringify(orderPayload) });
-        const data = await res.json();
-        if (data.checkoutUrl) window.location.href = data.checkoutUrl;
-        else { alert("Payment error: " + (data.error || "Try again.")); setIsProcessingPay(false); }
-      } catch (err) { alert("Failed to connect to gateway."); setIsProcessingPay(false); }
+  const executeCheckout = async () => {
+    if (cart.length === 0) return;
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: cart, total: cart.reduce((sum, i) => sum + (i.price * i.qty), 0) }),
+      });
+      if (res.ok) {
+        alert("Acquisition request broadcasted successfully! Our hostess logistics team will reach out to schedule your delivery from our China transit terminals.");
+        setCart([]);
+        setIsCartOpen(false);
+      }
+    } catch (err) {
+      alert("Checkout sequence processing fault.");
     }
   };
 
-  const runAiAnalysis = () => {
-    if (sqm <= 0) return;
-    const multi = projectType === "Commercial (High-Rise)" ? 1.5 : projectType === "Apartment Complex" ? 1.2 : 1.0;
-    setAiAnalysis({
-      cementBags: Math.ceil(sqm * 0.4 * multi),
-      steelKg: Math.ceil(sqm * 2.5 * multi),
-      gypsumBoards: Math.ceil(sqm * 0.15 * multi),
-      recommendedSteel: products.find(p => p.category.includes("Steel") && p.stock > 0)
-    });
+  const handleAiMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if(!aiInput.trim()) return;
+    const userMsg = aiInput;
+    setAiLog(p => [...p, { sender: "user", text: userMsg }]);
+    setAiInput("");
+
+    setTimeout(() => {
+      let aiResponse = "Our system node is validating that operational standard with our logistics base.";
+      if(userMsg.toLowerCase().includes("steel") || userMsg.includes("ብረት")) {
+        aiResponse = "We host high tensile strength Grade 60 Turkish Deformed Steel (ቱርክ ብረት) structural components. Add them to your freight catalog allocation to prompt quote settlement.";
+      } else if (userMsg.toLowerCase().includes("delivery") || userMsg.toLowerCase().includes("china") || userMsg.toLowerCase().includes("shipping")) {
+        aiResponse = "AmanZone hostess operators oversee all supply lines coming straight from China delivery points safely to your port coordinates. All logistics are strictly routed through our China imports division.";
+      } else if (userMsg.toLowerCase().includes("mdf") || userMsg.includes("ጣውላ")) {
+        aiResponse = "We supply premium dense-core MDF boards and natural timber variants. Please check the active yard inventory below for current metric dimensions.";
+      }
+      setAiLog(p => [...p, { sender: "ai", text: aiResponse }]);
+    }, 800);
   };
 
-  // Dynamic Theme Classes
-  const bgMain = isDarkMode ? "bg-[#0b0b0b] text-white" : "bg-gray-50 text-gray-900";
-  const bgCard = isDarkMode ? "bg-[#121212] border-white/5" : "bg-white border-gray-200 shadow-xl";
-  const bgNav = isDarkMode ? "bg-black/60 border-white/5 text-white" : "bg-white/80 border-gray-200 text-black";
-  const bgInput = isDarkMode ? "bg-black border-white/10" : "bg-gray-50 border-gray-300 text-black";
-
   return (
-    <div className={`${bgMain} min-h-screen font-sans overflow-x-hidden pb-32 transition-colors duration-300`}>
-      
-      {/* NAVBAR */}
-      <nav className={`fixed top-0 w-full z-[60] backdrop-blur-xl border-b px-6 py-4 flex justify-between items-center ${bgNav}`}>
-        <h1 className={`text-2xl font-black italic ${t.text} tracking-tighter`}>AMANZONE</h1>
-        <div className="flex gap-4 items-center">
-          
-          {/* Day/Night Toggle */}
-          <button onClick={toggleMode} className="p-2 rounded-full hover:bg-gray-500/20 transition">
-            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? "bg-neutral-950 text-neutral-100" : "bg-neutral-50 text-neutral-900"}`}>
+      {/* Structural Glass Header */}
+      <header className={`sticky top-0 z-40 border-b backdrop-blur-md ${isDarkMode ? "bg-neutral-950/80 border-neutral-800" : "bg-white/80 border-neutral-200"} px-4 md:px-6 py-4 flex justify-between items-center`}>
+        <div>
+          <h1 className="text-xl md:text-2xl font-black tracking-wider text-amber-500">AMANZONE TRADING PLC</h1>
+          <p className="text-[10px] md:text-xs uppercase tracking-widest text-neutral-500 font-bold">Premium Materials Hub</p>
+        </div>
+        <div className="flex items-center gap-3 md:gap-4">
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-lg border border-neutral-800 text-xs font-semibold hidden md:block">
+            {isDarkMode ? "☼ Light View" : "🌙 Industrial Dark"}
           </button>
-
-          {/* Lang Preferences */}
-          <div className={`flex rounded-full border p-1 hidden sm:flex ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-gray-100 border-gray-200'}`}>
-            {['EN', 'AMH', 'CN'].map(l => (
-              <button key={l} onClick={() => setLang(l)} className={`px-3 py-1 rounded-full text-[10px] font-bold ${lang === l ? `${t.bg} text-white` : 'text-gray-400'}`}>{l}</button>
-            ))}
-          </div>
-
-          <button onClick={() => setShowCheckout(true)} className={`${t.bg} p-2.5 rounded-xl text-white relative hover:scale-105 transition shadow-lg`}>
-            <ShoppingCart size={20} />
-            {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full shadow-md">{cart.length}</span>}
+          <button onClick={() => setIsCartOpen(true)} className="bg-amber-500 hover:bg-amber-600 text-neutral-950 font-bold px-3 md:px-4 py-2 rounded-lg relative transition-colors text-xs md:text-sm uppercase tracking-wider">
+            Freight Cargo
+            {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold animate-pulse">{cart.reduce((sum,i)=>sum+i.qty,0)}</span>}
           </button>
         </div>
-      </nav>
+      </header>
 
-      {/* HERO */}
-      <section className="pt-44 pb-16 px-6 text-center max-w-5xl mx-auto">
-        <motion.h2 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="text-6xl md:text-8xl font-black uppercase tracking-tighter leading-none mb-6">
-          {content[lang].hero}
-        </motion.h2>
+      {/* Hero Display Frame */}
+      <section className={`py-12 md:py-16 px-6 text-center border-b ${isDarkMode ? "bg-neutral-900/40 border-neutral-800" : "bg-neutral-100 border-neutral-200"}`}>
+        <h2 className="text-3xl md:text-4xl font-extrabold max-w-3xl mx-auto tracking-tight">Direct Architectural Supply Chains From Global Mills To Your Project Coordinate.</h2>
+        <p className="text-neutral-500 mt-4 max-w-xl mx-auto text-sm sm:text-base">Structural reinforcement steel bars, premium dense-core MDF boards, and bulk construction commodities ready for transit initialization from China.</p>
       </section>
 
-      {/* CATALOG */}
-      <section className={`px-6 max-w-7xl mx-auto grid gap-8 ${layout === 'grid' ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3' : 'grid-cols-1 max-w-4xl'}`}>
-        {products.length === 0 ? <p className="col-span-full text-center text-gray-500 py-10">Loading catalog...</p> : 
-          products.map((p: any) => (
-            <div key={p.id} className={`rounded-[2rem] border overflow-hidden group relative ${bgCard} ${layout === 'list' ? 'flex flex-row items-center h-56' : ''}`}>
-              {p.status === "Featured" && <div className={`absolute top-4 right-4 z-10 ${t.bg} text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg`}>Featured</div>}
-              
-              <div className={`${layout === 'list' ? 'w-1/3 h-full' : 'aspect-[4/3]'} relative bg-black`}>
-                <img src={p.image} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all duration-700 group-hover:scale-110" />
-              </div>
-              <div className={`p-8 ${layout === 'list' ? 'w-2/3' : ''}`}>
-                <h4 className="text-xl font-bold mb-2 leading-tight">{p.name}</h4>
-                {(p.type || p.color) && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {p.type && <span className={`text-[10px] px-2 py-1 rounded uppercase tracking-widest ${isDarkMode ? 'bg-white/5 border border-white/10 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>{p.type}</span>}
+      {/* Primary Catalog Interface */}
+      <main className="max-w-7xl mx-auto p-4 md:p-8">
+        <h3 className="text-lg md:text-xl font-bold uppercase tracking-widest mb-6 md:mb-8 text-neutral-400">Available Yard Inventory</h3>
+        {products.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-neutral-800 rounded-2xl">
+            <p className="text-neutral-500 text-sm">No live material assets discovered in the database terminal matrix right now.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            {products.map((product) => (
+              <div key={product.id} className={`border rounded-xl overflow-hidden shadow-sm transition-transform hover:-translate-y-1 ${isDarkMode ? "bg-neutral-900 border-neutral-800" : "bg-white border-neutral-200"}`}>
+                {product.imageUrl && <img src={product.imageUrl} alt={product.title} className="w-full h-48 md:h-56 object-cover border-b border-neutral-800" />}
+                <div className="p-5 md:p-6 space-y-4">
+                  {/* Category Pathing */}
+                  {(product.menu || product.category) && (
+                    <span className="text-[10px] md:text-xs uppercase font-extrabold tracking-widest text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-md">
+                      {product.menu || product.category} {product.submenu && `➔ ${product.submenu}`}
+                    </span>
+                  )}
+                  
+                  <h4 className="text-lg md:text-xl font-bold tracking-tight">{product.title}</h4>
+                  
+                  {/* Amharic/Detailed Matrix Badges */}
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {product.type && <span className="bg-neutral-800 border border-neutral-700 text-neutral-300 text-[10px] px-2 py-1 rounded font-mono uppercase">Type: {product.type}</span>}
+                    {product.metric && <span className="bg-neutral-800 border border-neutral-700 text-neutral-300 text-[10px] px-2 py-1 rounded font-mono uppercase">Dim: {product.metric}</span>}
+                    {product.color && <span className="bg-neutral-800 border border-neutral-700 text-neutral-300 text-[10px] px-2 py-1 rounded font-mono uppercase">Col: {product.color}</span>}
                   </div>
-                )}
-                <div className="flex justify-between items-end mb-6">
-                  <p className={`${t.text} font-mono text-xl font-bold`}>{Number(p.price).toLocaleString()} ETB <span className={`text-xs ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} font-sans font-normal`}>/{p.unit}</span></p>
-                  <p className={`text-[10px] uppercase px-2 py-1 rounded ${isDarkMode ? 'text-gray-500 bg-white/5' : 'text-gray-600 bg-gray-100'}`}>Stock: {p.stock}</p>
+
+                  <p className={`text-xs md:text-sm line-clamp-3 mt-2 ${isDarkMode ? "text-neutral-400" : "text-neutral-600"}`}>{product.description}</p>
+                  
+                  <div className="flex justify-between items-center pt-4 mt-4 border-t border-neutral-800/50">
+                    <span className="text-xl md:text-2xl font-black text-neutral-100">${product.price}<span className="text-[10px] text-neutral-500 font-normal"> / UNIT</span></span>
+                    <button onClick={() => addToCart(product)} className="bg-neutral-800 hover:bg-neutral-700 text-amber-500 border border-amber-500/30 px-3 md:px-4 py-2 rounded-lg text-[10px] md:text-xs font-bold uppercase tracking-wider transition-colors shadow-lg">Allocate</button>
+                  </div>
                 </div>
-                <button onClick={() => addToCart(p)} className={`w-full ${isDarkMode ? 'bg-white text-black' : 'bg-black text-white'} py-4 rounded-2xl font-black text-xs uppercase tracking-widest ${t.hover} transition-colors flex items-center justify-center gap-2`}>
-                  <Package size={16}/> Add to Project
-                </button>
               </div>
-            </div>
-          ))
-        }
-      </section>
+            ))}
+          </div>
+        )}
+      </main>
 
-      {/* THE FLOATING AI ICON */}
-      <button onClick={() => setShowAiModal(true)} className={`fixed bottom-8 right-8 z-50 ${t.bg} p-5 rounded-full shadow-[0_0_20px_rgba(0,0,0,0.5)] hover:scale-110 transition flex items-center justify-center group animate-bounce`}>
-        <Zap size={24} className="text-white" />
-        <span className="absolute right-20 bg-black text-white border border-white/20 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Smart AI Estimator</span>
-      </button>
-
-      {/* AI MODAL & CHECKOUT DRAWER OMITTED FOR BREVITY BUT FULLY FUNCTIONAL */}
-      {/* Checkout Drawer Content Highlights Below */}
+      {/* Sliding Freight Cart Drawer Component */}
       <AnimatePresence>
-        {showCheckout && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex justify-end">
-            <motion.div initial={{ x: 100 }} animate={{ x: 0 }} className={`w-full max-w-md md:max-w-xl h-full border-l flex flex-col shadow-2xl ${isDarkMode ? 'bg-[#0b0b0b] border-white/10 text-white' : 'bg-white border-gray-200 text-black'}`}>
-              
-              <div className="flex justify-between items-center p-8 border-b border-gray-500/20">
-                <h2 className={`text-2xl font-black italic ${t.text}`}>PROJECT CART</h2>
-                <button onClick={()=>setShowCheckout(false)} className="p-2 rounded-full hover:bg-gray-500/20"><X size={20}/></button>
+        {isCartOpen && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.5 }} exit={{ opacity: 0 }} onClick={() => setIsCartOpen(false)} className="fixed inset-0 bg-black z-50" />
+            <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "tween" }} className={`fixed right-0 top-0 h-full w-full sm:w-[400px] z-50 p-6 flex flex-col justify-between shadow-2xl border-l ${isDarkMode ? "bg-neutral-900 border-neutral-800" : "bg-white border-neutral-200"}`}>
+              <div>
+                <div className="flex justify-between items-center border-b border-neutral-800 pb-4 mb-6">
+                  <h4 className="text-lg font-black tracking-wider uppercase text-amber-500">Freight Manifesto</h4>
+                  <button onClick={() => setIsCartOpen(false)} className="text-neutral-400 font-bold hover:text-neutral-200">✕ Close</button>
+                </div>
+                <div className="space-y-4 overflow-y-auto max-h-[60vh] pr-2">
+                  {cart.length === 0 && <p className="text-neutral-500 text-sm text-center py-10">No items currently allocated for freight.</p>}
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex justify-between items-center bg-neutral-950 p-4 border border-neutral-800 rounded-xl">
+                      <div>
+                        <h5 className="font-bold text-sm text-neutral-100 line-clamp-1">{item.title}</h5>
+                        <p className="text-[10px] text-amber-500 font-mono mt-1">{item.metric || 'Standard'} • {item.color || 'Base'}</p>
+                        <p className="text-xs text-neutral-500 mt-1">${item.price} x {item.qty}</p>
+                      </div>
+                      <span className="font-mono font-black text-sm text-amber-500 ml-4">${item.price * item.qty}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+              <div className="border-t border-neutral-800 pt-6 space-y-4 bg-neutral-900">
+                <div className="flex justify-between items-center font-bold text-lg">
+                  <span className="text-neutral-300">Gross Valuation:</span>
+                  <span className="font-mono text-xl text-neutral-100">${cart.reduce((sum,i)=>sum+(i.price*i.qty),0)}</span>
+                </div>
+                <button onClick={executeCheckout} className="w-full bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black py-4 rounded-lg tracking-widest uppercase transition-colors text-xs sm:text-sm shadow-[0_0_15px_rgba(245,158,11,0.2)]">Initialize Routing via China</button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-              {/* CART LIST WITH MANUAL QTY */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-4">
-                {cart.length === 0 ? <p className="text-gray-500 text-center mt-10">Your cart is empty.</p> : cart.map((item) => (
-                  <div key={item.id} className={`flex gap-4 p-4 rounded-2xl border items-center ${isDarkMode ? 'bg-[#161616] border-white/5' : 'bg-gray-50 border-gray-200'}`}>
-                    <img src={item.image} className="w-16 h-16 rounded-xl object-cover" />
-                    <div className="flex-1">
-                      <p className="font-bold text-sm leading-tight">{item.name}</p>
-                      <p className={`${t.text} font-mono text-sm mt-1 font-bold`}>{(item.price * item.qty).toLocaleString()} ETB</p>
-                    </div>
-                    {/* MANUAL QTY INPUT */}
-                    <div className={`flex items-center gap-1 rounded-lg p-1 border ${isDarkMode ? 'bg-black border-white/5' : 'bg-white border-gray-300'}`}>
-                      <button onClick={()=>updateQty(item.id, -1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-500/20 rounded-md">-</button>
-                      <input type="number" value={item.qty} onChange={(e) => setExactQty(item.id, e.target.value)} className={`w-12 text-center text-sm font-bold bg-transparent outline-none ${isDarkMode ? 'text-white' : 'text-black'}`} />
-                      <button onClick={()=>updateQty(item.id, 1)} className="w-8 h-8 flex items-center justify-center hover:bg-gray-500/20 rounded-md">+</button>
-                    </div>
-                    <button onClick={()=>removeFromCart(item.id)} className="text-red-500 hover:text-red-700 p-2"><Trash2 size={16}/></button>
+      {/* Floating Tactical Conversational AI Agent Core Node */}
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40">
+        <button onClick={() => setIsAiOpen(!isAiOpen)} className="bg-amber-500 hover:bg-amber-600 text-neutral-950 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-2xl font-black text-xl flex items-center justify-center transition-transform active:scale-95 relative">
+          {isAiOpen ? "✕" : "🤖"}
+          {!isAiOpen && <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-ping"></span>}
+        </button>
+        <AnimatePresence>
+          {isAiOpen && (
+            <motion.div initial={{ opacity: 0, y: 20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.95 }} className="absolute bottom-16 sm:bottom-20 right-0 w-[calc(100vw-32px)] sm:w-96 h-[400px] bg-neutral-900 border border-neutral-800 rounded-xl shadow-2xl flex flex-col overflow-hidden">
+              <div className="bg-neutral-800 p-4 border-b border-neutral-700 flex justify-between items-center">
+                <div>
+                  <h4 className="font-bold text-xs sm:text-sm tracking-wide text-amber-500 uppercase flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> AmanZone System Agent
+                  </h4>
+                  <p className="text-[9px] sm:text-[10px] text-neutral-400 mt-1">Automated Supply Chain Assistant Node</p>
+                </div>
+              </div>
+              <div className="flex-1 p-4 space-y-3 overflow-y-auto text-xs flex flex-col scroll-smooth">
+                {aiLog.map((log, i) => (
+                  <div key={i} className={`p-3 rounded-xl max-w-[85%] leading-relaxed ${log.sender === "ai" ? "bg-neutral-800 text-neutral-200 self-start rounded-tl-sm border border-neutral-700" : "bg-amber-500 text-neutral-950 font-medium self-end rounded-tr-sm shadow-md"}`}>
+                    {log.text}
                   </div>
                 ))}
               </div>
-
-              {/* CHECKOUT FORM */}
-              <div className={`p-8 border-t ${isDarkMode ? 'bg-[#121212] border-white/5' : 'bg-gray-50 border-gray-200'}`}>
-                
-                <div className="space-y-3 mb-6">
-                  {/* NEW: Company Name */}
-                  <div className="relative">
-                    <Building size={14} className="absolute left-4 top-4 text-gray-500"/>
-                    <input placeholder="Company Name (Optional)" value={clientData.company} onChange={e=>setClientData({...clientData, company: e.target.value})} className={`w-full py-3 pl-10 pr-4 rounded-xl text-sm outline-none ${bgInput}`} />
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <div className="flex-1 relative">
-                        <User size={14} className="absolute left-4 top-4 text-gray-500"/>
-                        <input placeholder="Full Name" value={clientData.name} onChange={e=>setClientData({...clientData, name: e.target.value})} className={`w-full py-3 pl-10 pr-4 rounded-xl text-sm outline-none ${bgInput}`} />
-                    </div>
-                    <div className="flex-1 relative">
-                        <Phone size={14} className="absolute left-4 top-4 text-gray-500"/>
-                        <input placeholder="Phone" value={clientData.phone} onChange={e=>setClientData({...clientData, phone: e.target.value})} className={`w-full py-3 pl-10 pr-4 rounded-xl text-sm outline-none ${bgInput}`} />
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <MapPin size={14} className="absolute left-4 top-4 text-gray-500"/>
-                    <input placeholder="Delivery Address" value={clientData.address} onChange={e=>setClientData({...clientData, address: e.target.value})} className={`w-full py-3 pl-10 pr-4 rounded-xl text-sm outline-none ${bgInput}`} />
-                  </div>
-                  {isReceipt && (
-                    <div className="relative">
-                        <Receipt size={14} className="absolute left-4 top-4 text-gray-500"/>
-                        <input placeholder="Company TIN Number" value={clientData.tin} onChange={e=>setClientData({...clientData, tin: e.target.value})} className={`w-full py-3 pl-10 pr-4 rounded-xl text-sm outline-none border ${t.border} focus:ring-1`} />
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 mb-6 border-t border-gray-500/20 pt-4">
-                  <div className="flex justify-between text-sm text-gray-500"><span>Subtotal</span><span className="font-mono">{subtotal.toLocaleString()} ETB</span></div>
-                  {isReceipt && <div className="flex justify-between text-sm text-orange-500/80"><span>VAT (15%)</span><span className="font-mono">+{vat.toLocaleString()} ETB</span></div>}
-                  <div className="flex justify-between text-xl font-black mt-2 pt-2 border-t border-gray-500/20"><span>Total</span><span className={`${t.text} font-mono`}>{grandTotal.toLocaleString()} ETB</span></div>
-                </div>
-
-                {isReceipt ? (
-                  <button onClick={()=>submitOrder('OFFICIAL')} disabled={isProcessingPay} className={`w-full ${t.bg} text-white py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:opacity-80 transition flex justify-center items-center gap-2`}>
-                    <CreditCard size={16}/> {isProcessingPay ? "Connecting to Chapa API..." : "Pay Securely with Chapa"}
-                  </button>
-                ) : (
-                  <button onClick={()=>submitOrder('DRAFT')} className={`w-full border ${t.border} ${t.text} py-4 rounded-xl font-black text-xs uppercase tracking-widest ${t.fill} transition`}>Send Order for Review</button>
-                )}
-              </div>
+              <form onSubmit={handleAiMessage} className="p-3 border-t border-neutral-800 bg-neutral-950 flex gap-2">
+                <input type="text" value={aiInput} onChange={(e)=>setAiInput(e.target.value)} placeholder="Inquire about routing logistics..." className="flex-1 bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+                <button type="submit" disabled={!aiInput.trim()} className="bg-amber-500 text-neutral-950 font-bold px-4 rounded-lg text-xs disabled:opacity-50 transition-opacity">Send</button>
+              </form>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
