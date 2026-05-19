@@ -1,27 +1,36 @@
-import { db } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
 
+// FETCH ALL PRODUCTS FOR CATALOG
 export async function GET() {
   try {
-    const snapshot = await db.collection("inventory").get();
-    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    return NextResponse.json(items);
-  } catch (error) {
-    console.error("Inventory Fetch Error:", error);
-    return NextResponse.json([]); 
+    const snapshot = await adminDb.collection("products").orderBy("createdAt", "desc").get();
+    const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return NextResponse.json(products);
+  } catch (error: any) {
+    console.error("Inventory GET API Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to fetch inventory" }, { status: 500 });
   }
 }
 
+// DEPLOY NEW PRODUCT TO DATABASE
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const docRef = await db.collection("inventory").add({
+    
+    if (!body.title || !body.price) {
+       return NextResponse.json({ error: "Missing required fields (title, price)." }, { status: 400 });
+    }
+
+    const productRef = await adminDb.collection("products").add({
       ...body,
       createdAt: new Date().toISOString(),
     });
-    return NextResponse.json({ id: docRef.id, message: "Product Added" });
-  } catch (error) {
-    console.error("Failed to add product:", error);
-    return NextResponse.json({ error: "Failed to add product" }, { status: 500 });
+    
+    return NextResponse.json({ id: productRef.id, ...body }, { status: 201 });
+  } catch (error: any) {
+    console.error("Inventory POST API Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to add product" }, { status: 500 });
   }
 }
