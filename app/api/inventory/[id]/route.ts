@@ -1,23 +1,20 @@
-import { adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
+import { adminDb } from "@/lib/firebase-admin";
 
-// DELETE A PRODUCT
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+// Next.js 15+ strict parameter typing
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    await adminDb.collection("inventory").doc(params.id).delete();
-    return NextResponse.json({ message: "Product deleted successfully" });
+    // We must await the params object now
+    const { id } = await params;
+    
+    await adminDb.collection("inventory").doc(id).delete();
+    
+    return NextResponse.json({ message: "Material successfully removed from catalog." }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to delete product" }, { status: 500 });
-  }
-}
-
-// UPDATE A PRODUCT
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const body = await request.json();
-    await adminDb.collection("inventory").doc(params.id).update(body);
-    return NextResponse.json({ message: "Product updated successfully" });
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to update product" }, { status: 500 });
+    console.error("Deletion Error:", error);
+    return NextResponse.json({ error: "Failed to remove item." }, { status: 500 });
   }
 }

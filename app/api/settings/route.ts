@@ -1,39 +1,45 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebase-admin";
+import { adminDb } from "@/lib/firebase-admin";
 
 export async function POST(request: Request) {
   try {
     const { action, password, newPassword } = await request.json();
 
-    // Look for a saved password in the database
-    const docRef = db.collection("config").doc("admin");
+    // FIXED: Changed 'db' to 'adminDb' to match your import
+    const docRef = adminDb.collection("config").doc("admin");
     const doc = await docRef.get();
     
-    // If no password is in the DB yet, fallback to your .env.local password ("miracle")
+    // Fallback to .env.local password if database is empty
     const currentRealPassword = doc.exists ? doc.data()?.password : (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "miracle");
 
-    // Action 1: Logging in
+    // Action 1: Verification / Login
     if (action === "verify") {
       if (password === currentRealPassword) {
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true }, { status: 200 });
       }
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized access attempt" }, { status: 401 });
     }
 
-    // Action 2: Changing the password from the UI
+    // Action 2: Update Password
     if (action === "update") {
       if (password !== currentRealPassword) {
         return NextResponse.json({ error: "Current password incorrect" }, { status: 401 });
       }
+
+      if (!newPassword || newPassword.length < 4) {
+        return NextResponse.json({ error: "New password must be at least 4 characters" }, { status: 400 });
+      }
+
       // Save the new password to Firestore
       await docRef.set({ password: newPassword }, { merge: true });
-      return NextResponse.json({ success: true, message: "Password updated securely" });
+      return NextResponse.json({ success: true, message: "Password updated securely" }, { status: 200 });
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    // Fallback for unknown actions
+    return NextResponse.json({ error: "Invalid action requested" }, { status: 400 });
 
   } catch (error) {
     console.error("Settings API Error:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Server error occurred" }, { status: 500 });
   }
 }

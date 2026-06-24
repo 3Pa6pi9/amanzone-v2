@@ -1,63 +1,75 @@
-import { adminDb } from "@/lib/firebase-admin";
 import { NextResponse } from "next/server";
-
-// This is Chapa's official initialization endpoint
-const CHAPA_URL = "https://api.chapa.co/v1/transaction/initialize";
+import { adminDb } from "@/lib/firebase-admin";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const { items, customer, delivery, totalAmount, isNegotiable } = body;
+
+    // 1. Log the Order to Firebase
+    const orderStatus = isNegotiable ? "negotiation_requested" : "pending";
     
-    // 1. First, save the order to Firebase with a "PENDING_PAYMENT" status
-    const docRef = await adminDb.collection("orders").add({
-      ...body,
+    const orderRef = await adminDb.collection("orders").add({
+      customer: customer || { name: "Guest", phone: "N/A", company: "N/A", tin: "N/A" },
+      delivery: delivery || { method: "Store Pickup", address: "N/A" },
+      items: items || [],
+      total: totalAmount,
+      status: orderStatus,
+      isNegotiable: isNegotiable || false,
+      paymentMethod: isNegotiable ? "manual_contact" : "chapa",
       createdAt: new Date().toISOString(),
-      status: "PENDING_PAYMENT"
     });
 
-    // 2. Format the data perfectly for Chapa
-    // Chapa requires a unique transaction reference (tx_ref) for every single payment
-    const tx_ref = `amz-${docRef.id}-${Date.now()}`;
+    // 2. Branch Logic: Bypass Chapa if Negotiable
+    if (isNegotiable) {
+      return NextResponse.json({ 
+        success: true, 
+        message: "Order submitted for negotiation. Our team will contact you shortly.",
+        orderId: orderRef.id 
+      }, { status: 200 });
+    }
 
+    // 3. Initialize Chapa for Standard Purchases
     const chapaPayload = {
-      amount: body.total.toString(),
+      amount: totalAmount.toString(),
       currency: "ETB",
-      email: "finance@amanzone.com", // You can use a generic email if the client doesn't provide one
-      first_name: body.client.name.split(" ")[0] || "AmanZone",
-      last_name: body.client.name.split(" ")[1] || "Client",
-      phone_number: body.client.phone,
-      tx_ref: tx_ref,
-      callback_url: `https://your-live-website.com/api/payment-webhook`,
-      return_url: `http://localhost:3000/?payment=success`, // Where they go after paying
+      email: "customer@amanzone.com", 
+      first_name: customer?.name?.split(" ")[0] || "AmanZone",
+      last_name: customer?.name?.split(" ")[1] || "Client",
+      tx_ref: `txn-${orderRef.id}-${Date.now()}`,
+      callback_url: `https://your-domain.com/api/chapa/callback`,
+      return_url: `http://localhost:3000/success?order=${orderRef.id}`,
       customization: {
-        title: "AmanZone Trading PLC",
-        description: "Payment for Construction Materials",
-        logo: "https://your-logo-url-here.png" // We can update this once you upload your logo
+        title: "AmanZone", // <--- THE FIX: Shortened to fit Chapa's 16-character limit
+        description: `Payment for Order ${orderRef.id}`,
       }
     };
 
-    // 3. Send the request to Chapa
-    const chapaResponse = await fetch(CHAPA_URL, {
+    const chapaResponse = await fetch("https://api.chapa.co/v1/transaction/initialize", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.CHAPA_SECRET_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(chapaPayload)
+      body: JSON.stringify(chapaPayload),
     });
 
     const chapaData = await chapaResponse.json();
 
+    // 4. Handle Chapa's Response Safely
     if (chapaData.status === "success") {
-      // 4. Return the secure checkout link to the Client UI
-      return NextResponse.json({ checkoutUrl: chapaData.data.checkout_url });
+      return NextResponse.json({ checkoutUrl: chapaData.data.checkout_url }, { status: 200 });
     } else {
-      console.error("Chapa Error:", chapaData);
-      return NextResponse.json({ error: chapaData.message || "Failed to initialize payment" }, { status: 400 });
+      const errorMessage = typeof chapaData.message === 'string' 
+        ? chapaData.message 
+        : JSON.stringify(chapaData.message || chapaData);
+        
+      console.error("Chapa Detailed Error:", errorMessage);
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
 
   } catch (error) {
-    console.error("Checkout Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("Checkout System Error:", error);
+    return NextResponse.json({ error: "Internal server error during checkout." }, { status: 500 });
   }
 }

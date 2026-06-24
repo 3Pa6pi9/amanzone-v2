@@ -1,344 +1,357 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Package, Clock, PlusCircle, Upload, Lock, Settings, Key, Image as ImageIcon, Palette, LogOut, LayoutTemplate } from 'lucide-react';
+import { useState, useEffect } from "react";
 
-const categoryDictionary: Record<string, { subCategories: string[], units: string[] }> = {
-  "የግንባታ ብረት (Construction Steel)": { subCategories: ["የሀገር ውስጥ (Local)", "የቱርክ ብረት (Turkish)"], units: ["kg", "tons", "pcs"] },
-  "ቆርቆሮ (Roofing Iron)": { subCategories: ["መደበኛ ቆርቆሮ", "ኤጋ ቆርቆሮ", "ታይልስ ቆርቆሮ"], units: ["pcs", "m"] },
-  "ጂብሰም ቦርድ (Gypsum Board)": { subCategories: ["የውሃ ስርገት የሚከላከል", "የድምፅ ስርገት የሚከላከል", "መገጣጠሚያዎች"], units: ["pcs", "m²"] },
-  "የኮርኒስ ንጣፍ (Ceiling)": { subCategories: ["ፒ.ቪ.ሲ (PVC)", "Armstrong (አርምስትሮንግ)", "Acrostic (አኮስቲክ)", "መገጣጠሚያዎች"], units: ["pcs", "m²", "box"] },
-  "ጣውላ (Timber)": { subCategories: ["አውስትራሊያ", "ሻሸመኔ"], units: ["pcs", "m³", "m"] },
-  "MDF": { subCategories: ["የተለጠፈ (Laminated)", "መደበኛ (Standard)"], units: ["pcs", "m²"] },
-  "ትቦላሬ (Tubular & Profiles)": { subCategories: ["RHS (Rectangular Hallow Section)", "CHS (Circular Hallow Section)", "SHS (Square Hallow Section)", "ቶንዲኖ (Round Bar)", "ፊያቶ (Flat Iron)", "አንግል (Angle Iron)", "ኤል.ቲ.ዜድ (LTZ)", "ላሜራ (Sheet Metal)"], units: ["pcs", "kg", "m"] }
+// --- THEME ENGINE ---
+const themeMap: Record<string, any> = {
+  amber: { text: "text-amber-500", bg: "bg-amber-500", border: "border-amber-500", hover: "hover:bg-amber-500", hoverText: "hover:text-amber-500", checked: "checked:bg-amber-500 checked:border-amber-500", focus: "focus:border-amber-500" },
+  crimson: { text: "text-rose-600", bg: "bg-rose-600", border: "border-rose-600", hover: "hover:bg-rose-600", hoverText: "hover:text-rose-600", checked: "checked:bg-rose-600 checked:border-rose-600", focus: "focus:border-rose-600" },
+  cobalt: { text: "text-blue-500", bg: "bg-blue-500", border: "border-blue-500", hover: "hover:bg-blue-500", hoverText: "hover:text-blue-500", checked: "checked:bg-blue-500 checked:border-blue-500", focus: "focus:border-blue-500" },
+  emerald: { text: "text-emerald-500", bg: "bg-emerald-500", border: "border-emerald-500", hover: "hover:bg-emerald-500", hoverText: "hover:text-emerald-500", checked: "checked:bg-emerald-500 checked:border-emerald-500", focus: "focus:border-emerald-500" },
+  violet: { text: "text-violet-500", bg: "bg-violet-500", border: "border-violet-500", hover: "hover:bg-violet-500", hoverText: "hover:text-violet-500", checked: "checked:bg-violet-500 checked:border-violet-500", focus: "focus:border-violet-500" }
+};
+
+const catalogStructure: Record<string, any> = {
+  "Construction Steel (የግንባታ ብረት)": { submenus: ["Turkish (ቱርክ)", "Local (ሀገር በቀል)"], types: ["Deformed Bar", "Plain Bar"], metrics: ["8mm", "10mm", "12mm", "14mm", "16mm", "20mm", "24mm"], colors: ["Standard Iron"] },
+  "Roofing Iron Sheets (ቆርቆሮ)": { submenus: ["Standard (የተለመደ)", "EGA (ኢ.ጂ.ኤ)", "Tiles (ታይልስ)"], types: ["G-28", "G-32", "G-35"], metrics: ["Standard Length", "Custom Length"], colors: ["Unpainted", "Red", "Blue", "Green"] },
+  "Tubular Steel Profiles (ቱቦና ፕሮፋይል ብረት)": { submenus: ["RHS", "CHS", "SHS", "Round Bar", "Flat Iron", "Angle Iron", "LTZ", "Sheet Metal"], types: ["Standard Duty", "Heavy Duty"], metrics: ["1mm", "1.2mm", "1.5mm", "2mm", "Custom"], colors: ["Standard Iron"] },
+  "Ceiling Tiles (ኮርኒስ)": { submenus: ["PVC", "Armstrong", "Acoustic"], types: ["Standard", "Waterproof", "Fire Retardant"], metrics: ["60x60cm", "Custom"], colors: ["White", "Wood Grain", "Custom"] },
+  "Timber (ጣውላ)": { submenus: ["Australia (አውስትራሊያ)", "Shashemene (ሻሸመኔ)"], types: ["Eucalyptus", "Pine", "Hardwood"], metrics: ["2x4", "2x3", "Custom"], colors: ["Natural Wood"] },
+  "MDF Boards (ኤም ዲ ኤፍ)": { submenus: ["Laminated", "Raw"], types: ["Standard", "High Density"], metrics: ["1220x2440mm", "Custom"], colors: ["White", "Black", "Walnut", "Custom"] },
+  "Gypsum Board (ጂፕሰም)": { submenus: ["Standard", "Moisture Resistant", "Fire Retardant"], types: ["Interior Grade", "Exterior Grade"], metrics: ["9mm", "12.5mm"], colors: ["White / Gray"] }
 };
 
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'INVENTORY' | 'ORDERS' | 'SETTINGS'>('INVENTORY');
-  
+  const [passwordInput, setPasswordInput] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [activeTab, setActiveTab] = useState("deploy");
+  const [products, setProducts] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
-  const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-
-  // Settings State
-  const [theme, setTheme] = useState('orange');
-  const [layout, setLayout] = useState('grid');
   
-  const [newItem, setNewItem] = useState({
-    name: "", category: "የግንባታ ብረት (Construction Steel)", subCategory: "የሀገር ውስጥ (Local)",
-    type: "", color: "", price: "", stock: "", unit: "kg", status: "Standard"
-  });
+  const [title, setTitle] = useState("");
+  const [price, setPrice] = useState("");
+  const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
+  const [menu, setMenu] = useState("");
+  const [submenu, setSubmenu] = useState("");
+  const [materialType, setMaterialType] = useState("");
+  const [color, setColor] = useState("");
+  const [metric, setMetric] = useState("");
+
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  
+  // Dynamic App Theme State
+  const [appTheme, setAppTheme] = useState("amber");
+  const tTheme = themeMap[appTheme] || themeMap.amber;
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetch('/api/orders').then(res => res.json()).then(data => setOrders(Array.isArray(data) ? data : []));
-      fetch('/api/inventory').then(res => res.json()).then(data => setInventory(Array.isArray(data) ? data : []));
-      
-      setTheme(localStorage.getItem('az_theme') || 'orange');
-      setLayout(localStorage.getItem('az_layout') || 'grid');
-    }
-  }, [isAuthenticated]);
+    const savedTheme = localStorage.getItem("amanzone_theme");
+    if (savedTheme) setAppTheme(savedTheme);
+  }, []);
 
-  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedCat = e.target.value;
-    setNewItem({ ...newItem, category: selectedCat, subCategory: categoryDictionary[selectedCat].subCategories[0], unit: categoryDictionary[selectedCat].units[0] });
+  const handleSaveTheme = () => {
+    localStorage.setItem("amanzone_theme", appTheme);
+    alert("Global theme applied to Storefront & Admin. Refresh storefront to see changes.");
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) setIsAuthenticated(true);
-    else alert("Incorrect admin password.");
-  };
-
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return alert("Please select a product image.");
-    setLoading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
-
-      const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`, { method: "POST", body: formData });
-      const cloudinaryData = await cloudinaryRes.json();
-      
-      if (!cloudinaryData.secure_url) throw new Error("Image upload failed. Check Cloudinary settings.");
-
-      const response = await fetch("/api/inventory", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newItem, image: cloudinaryData.secure_url }),
-      });
-
-      if (response.ok) {
-        alert("Success: Product added to AmanZone Catalog!");
-        setNewItem({ ...newItem, name: "", price: "", stock: "", type: "", color: "" });
-        setFile(null);
-        fetch('/api/inventory').then(res => res.json()).then(data => setInventory(Array.isArray(data) ? data : [])); 
-      } else {
-        throw new Error("Firebase rejected the data.");
-      }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
-      console.error(error);
-    } finally {
-      setLoading(false);
+    if (passwordInput === "miracle" || passwordInput === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+      setIsAuthenticated(true);
+      setAuthError("");
+    } else {
+      setAuthError("Security Access Denied: Invalid Key.");
     }
   };
 
-  const updateTheme = (newTheme: string) => {
-    setTheme(newTheme);
-    localStorage.setItem('az_theme', newTheme);
-  };
-  const updateLayout = (newLayout: string) => {
-    setLayout(newLayout);
-    localStorage.setItem('az_layout', newLayout);
+  const fetchInventory = async () => {
+    try {
+      const res = await fetch("/api/inventory");
+      if (res.ok) setProducts(await res.json());
+    } catch (err) { console.error("Sync Error", err); }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#0b0b0b] flex items-center justify-center p-6 text-white font-sans selection:bg-orange-500">
-        <div className="bg-[#161616] p-10 rounded-3xl border border-white/10 w-full max-w-md shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 blur-3xl rounded-full"></div>
-          <div className="flex justify-center mb-6"><Lock size={40} className="text-orange-500" /></div>
-          <h2 className="text-3xl font-black text-center italic tracking-tighter mb-8">AMANZONE <span className="text-orange-500">ADMIN</span></h2>
-          <form onSubmit={handleLogin} className="space-y-4 relative z-10">
-            <input type="password" placeholder="Master Terminal Password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-black border border-white/10 p-4 rounded-xl outline-none focus:border-orange-500 transition font-mono" />
-            <button type="submit" className="w-full bg-orange-500 text-black font-black py-4 rounded-xl uppercase tracking-widest hover:bg-orange-600 transition">Unlock Terminal</button>
-          </form>
-        </div>
-      </div>
+  const fetchOrders = async () => {
+    try {
+      const res = await fetch("/api/orders");
+      if (res.ok) setOrders(await res.json());
+    } catch (err) { console.error("Order Sync Error", err); }
+  };
+
+  useEffect(() => { 
+    if (isAuthenticated) { fetchInventory(); fetchOrders(); }
+  }, [isAuthenticated]);
+
+  useEffect(() => { setSubmenu(""); setMaterialType(""); setColor(""); setMetric(""); }, [menu]);
+
+  const openCloudinary = () => {
+    // @ts-ignore
+    const widget = window.cloudinary.createUploadWidget(
+      { cloudName: "dfqfcbgb3", uploadPreset: "amanzone_uploads" },
+      (error: any, result: any) => { if (!error && result.event === "success") setImageUrl(result.info.secure_url); }
     );
-  }
+    widget.open();
+  };
+
+  const handleDeploy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch("/api/inventory", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, price: parseFloat(price), menu, submenu, type: materialType, color, metric, description, imageUrl }),
+      });
+      if (res.ok) {
+        alert("Deployed to Live Catalog!");
+        setTitle(""); setPrice(""); setMenu(""); setSubmenu(""); setMaterialType(""); setColor(""); setMetric(""); setDescription(""); setImageUrl(""); 
+        fetchInventory();
+      } else alert("Database Error: Check your Firebase connection.");
+    } catch (err) { alert("Deployment Failed."); }
+    finally { setLoading(false); }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsLoading(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update", password: currentPassword, newPassword: newPassword })
+      });
+      const data = await res.json();
+      if (res.ok) { alert("Password updated securely!"); setCurrentPassword(""); setNewPassword(""); } 
+      else alert(`Error: ${data.error}`);
+    } catch (err) { alert("Failed to connect to server."); }
+    finally { setSettingsLoading(false); }
+  };
+
+  if (!isAuthenticated) return (
+    <div className="min-h-screen bg-black flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-8 shadow-2xl">
+        <h1 className={`text-3xl font-black ${tTheme.text} mb-6 text-center`}>AMANZONE ADMIN</h1>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input type="password" value={passwordInput} onChange={(e)=>setPasswordInput(e.target.value)} placeholder="Access Key..." className={`w-full bg-black border border-neutral-800 rounded-lg p-3 text-white outline-none ${tTheme.focus}`}/>
+          <button type="submit" className={`w-full ${tTheme.bg} py-3 rounded-lg font-bold uppercase tracking-widest text-black`}>Unlock Node</button>
+          {authError && <p className="text-red-500 text-xs text-center">{authError}</p>}
+        </form>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="bg-[#0b0b0b] text-white min-h-screen p-6 md:p-10 font-sans selection:bg-orange-500">
-      
-      {/* HEADER & TABS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 border-b border-white/5 pb-6 sticky top-0 bg-[#0b0b0b]/90 backdrop-blur-md z-50 pt-4">
-        <h1 className="text-3xl md:text-4xl font-black text-orange-500 italic uppercase tracking-tighter">AmanZone Control</h1>
-        <div className="flex gap-2 bg-[#161616] p-1.5 rounded-2xl border border-white/10 overflow-x-auto w-full md:w-auto">
-          <button onClick={() => setActiveTab('INVENTORY')} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition ${activeTab === 'INVENTORY' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:text-white'}`}><Package size={16}/> Inventory</button>
-          <button onClick={() => setActiveTab('ORDERS')} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition ${activeTab === 'ORDERS' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:text-white'}`}><Clock size={16}/> Orders</button>
-          <button onClick={() => setActiveTab('SETTINGS')} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition ${activeTab === 'SETTINGS' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:text-white'}`}><Settings size={16}/> Settings</button>
+    <div className="min-h-screen bg-black text-neutral-100 flex font-sans">
+      <aside className="w-64 bg-neutral-900 border-r border-neutral-800 p-6 space-y-8 hidden md:block">
+        <h2 className={`text-xl font-black ${tTheme.text}`}>CONTROL PANEL</h2>
+        <nav className="flex flex-col gap-2">
+          {["deploy", "inventory", "orders", "settings"].map(tab => (
+            <button key={tab} onClick={()=>setActiveTab(tab)} className={`text-left p-3 rounded-lg capitalize font-bold ${activeTab === tab ? `${tTheme.bg} text-black` : "text-neutral-500 hover:bg-neutral-800"}`}>{tab}</button>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
+        <div className="flex gap-2 mb-6 md:hidden overflow-x-auto">
+           {["deploy", "inventory", "orders", "settings"].map(tab => (
+            <button key={tab} onClick={()=>setActiveTab(tab)} className={`px-4 py-2 rounded-lg capitalize text-sm font-bold ${activeTab === tab ? `${tTheme.bg} text-black` : "bg-neutral-900 text-neutral-500"}`}>{tab}</button>
+          ))}
         </div>
-        <button onClick={() => setIsAuthenticated(false)} className="text-gray-500 hover:text-white flex items-center gap-2 text-xs uppercase tracking-widest transition"><LogOut size={16}/> Logout</button>
-      </div>
-      
-      <div className="max-w-7xl mx-auto">
-        
-        {/* ================= INVENTORY TAB ================= */}
-        {/* ================= INVENTORY TAB ================= */}
-        
-        {activeTab === 'INVENTORY' && (
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
-            <div className="xl:col-span-4 bg-[#161616] p-8 rounded-[2rem] border border-white/5 sticky top-32">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
-                <PlusCircle className="text-orange-500"/> {newItem.id ? "EDIT PRODUCT" : "ADD STOCK"}
-              </h2>
-              
-              {/* Form implementation remains the same, just update handleUpload logic */}
-              <form onSubmit={handleUpload} className="space-y-5">
-                {/* ... (Keep your existing form inputs here) ... */}
-                
-                {/* Image Input (Make it optional if editing) */}
-                <div className="grid grid-cols-2 gap-4 items-end mt-4">
+
+        {activeTab === "deploy" && (
+          <div className="max-w-3xl bg-neutral-900 p-6 md:p-8 rounded-xl border border-neutral-800 shadow-xl">
+            <h3 className={`text-xl font-bold mb-6 border-b border-neutral-800 pb-4 ${tTheme.text} uppercase tracking-wider`}>New Material Deployment</h3>
+            <form onSubmit={handleDeploy} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-neutral-500 font-bold mb-2">Product Title</label>
+                  <input type="text" value={title} onChange={(e)=>setTitle(e.target.value)} required placeholder="e.g. 12mm Deformed Steel" className={`w-full bg-black p-3 border border-neutral-800 rounded-lg text-white outline-none ${tTheme.focus}`}/>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-neutral-500 font-bold mb-2">Price (ETB)</label>
+                  <input type="number" value={price} onChange={(e)=>setPrice(e.target.value)} required placeholder="Price in Birr" className={`w-full bg-black p-3 border border-neutral-800 rounded-lg text-white outline-none ${tTheme.focus}`}/>
+                </div>
+              </div>
+
+              <div className="bg-black/50 p-6 border border-neutral-800 rounded-xl space-y-4">
+                <h4 className="text-sm font-bold text-neutral-400 uppercase tracking-widest mb-4">Classification Matrix</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] uppercase tracking-widest text-gray-500 ml-2">Placement</label>
-                    <select value={newItem.status} onChange={e => setNewItem({...newItem, status: e.target.value})} className="w-full bg-black border border-white/10 p-4 rounded-xl mt-1 text-sm outline-none text-orange-500 font-bold">
-                        <option>Standard</option><option>Featured</option><option>Discounted</option>
+                    <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Main Category (Menu)</label>
+                    <select value={menu} onChange={(e)=>setMenu(e.target.value)} required className={`w-full bg-neutral-900 p-3 border border-neutral-800 rounded-lg text-sm text-white outline-none ${tTheme.focus}`}>
+                      <option value="">-- Select Category --</option>
+                      {Object.keys(catalogStructure).map((cat) => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 ml-2 mb-1">{newItem.id ? "Upload to replace image" : "Product Image"}</p>
-                    <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)} className="w-full bg-black border border-white/10 p-3 rounded-xl text-[10px] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-white file:text-black file:font-bold cursor-pointer" />
+                    <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Sub Category</label>
+                    <select value={submenu} onChange={(e)=>setSubmenu(e.target.value)} disabled={!menu} className={`w-full bg-neutral-900 p-3 border border-neutral-800 rounded-lg text-sm text-white outline-none disabled:opacity-50 ${tTheme.focus}`}>
+                      <option value="">-- Select Submenu --</option>
+                      {menu && catalogStructure[menu]?.submenus.map((sub: string) => <option key={sub} value={sub}>{sub}</option>)}
+                    </select>
                   </div>
                 </div>
 
-                <div className="flex gap-2 mt-4">
-                  <button disabled={loading} type="submit" className="flex-1 bg-orange-500 text-black font-black py-4 rounded-xl hover:bg-orange-600 transition uppercase tracking-widest text-xs">
-                    {loading ? "Processing..." : (newItem.id ? "Save Changes" : "Deploy")}
-                  </button>
-                  {newItem.id && (
-                    <button type="button" onClick={() => {
-                        setNewItem({ name: "", category: "የግንባታ ብረት (Construction Steel)", subCategory: "የሀገር ውስጥ (Local)", type: "", color: "", price: "", stock: "", unit: "kg", status: "Standard" });
-                        setFile(null);
-                    }} className="px-4 bg-gray-800 text-white rounded-xl text-xs font-bold hover:bg-gray-700">Cancel</button>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Type</label>
+                    <select value={materialType} onChange={(e)=>setMaterialType(e.target.value)} disabled={!menu} className={`w-full bg-neutral-900 p-3 border border-neutral-800 rounded-lg text-sm text-white outline-none disabled:opacity-50 ${tTheme.focus}`}>
+                      <option value="">-- Select Type --</option>
+                      {menu && catalogStructure[menu]?.types?.map((type: string) => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Color Variant</label>
+                    <select value={color} onChange={(e)=>setColor(e.target.value)} disabled={!menu} className={`w-full bg-neutral-900 p-3 border border-neutral-800 rounded-lg text-sm text-white outline-none disabled:opacity-50 ${tTheme.focus}`}>
+                      <option value="">-- Select Color --</option>
+                      {menu && catalogStructure[menu]?.colors?.map((col: string) => <option key={col} value={col}>{col}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-neutral-500 mb-2">Metric / Dimension</label>
+                    <select value={metric} onChange={(e)=>setMetric(e.target.value)} disabled={!menu} className={`w-full bg-neutral-900 p-3 border border-neutral-800 rounded-lg text-sm text-white outline-none disabled:opacity-50 ${tTheme.focus}`}>
+                      <option value="">-- Select Metric --</option>
+                      {menu && catalogStructure[menu]?.metrics?.map((met: string) => <option key={met} value={met}>{met}</option>)}
+                    </select>
+                  </div>
                 </div>
-              </form>
-            </div>
-            
-            <div className="xl:col-span-8">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><Package className="text-orange-500"/> LIVE DATABANK</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {inventory.length === 0 ? <p className="text-gray-500">Catalog is empty.</p> : inventory.map((item: any) => (
-                  <div key={item.id} className="bg-[#161616] p-5 rounded-2xl border border-white/5 hover:border-orange-500/30 transition flex flex-col justify-between group relative overflow-hidden">
-                    {/* NEW: Edit and Delete Buttons */}
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                      <button onClick={() => setNewItem(item)} className="bg-blue-500 text-white text-[10px] px-2 py-1 rounded font-bold">Edit</button>
-                      <button onClick={async () => {
-                        if(confirm("Are you sure you want to delete this product?")) {
-                          await fetch(`/api/inventory/${item.id}`, { method: 'DELETE' });
-                          fetch('/api/inventory').then(res=>res.json()).then(setInventory);
-                        }
-                      }} className="bg-red-500 text-white text-[10px] px-2 py-1 rounded font-bold">Del</button>
-                    </div>
-
-                    {item.status === "Featured" && <div className="absolute top-0 left-0 bg-orange-500 text-black text-[8px] font-black px-2 py-1 rounded-br-lg uppercase tracking-widest">Featured</div>}
-                    
-                    <div className="mt-4">
-                      <span className="text-[8px] bg-black px-2 py-1 rounded-md text-orange-500 uppercase tracking-widest border border-white/5 mb-2 inline-block max-w-full truncate">
-                        {item.category.split(' ')[0]} / {item.subCategory.split(' ')[0]}
-                      </span>
-                      <p className="font-bold text-sm leading-tight mt-1">{item.name}</p>
-                    </div>
-                    <div className="mt-4 flex justify-between items-end border-t border-white/5 pt-4">
-                      <p className="text-orange-500 font-mono text-sm font-bold">{item.price} ETB</p>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest bg-white/5 px-2 py-1 rounded-md">{item.stock} {item.unit}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
-            </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-neutral-500 font-bold mb-2">Specifications Note</label>
+                <textarea rows={3} value={description} onChange={(e)=>setDescription(e.target.value)} placeholder="Enter full material specifications here..." className={`w-full bg-black p-3 border border-neutral-800 rounded-lg text-white outline-none ${tTheme.focus}`}></textarea>
+              </div>
+
+              <div>
+                <button type="button" onClick={openCloudinary} className={`w-full bg-neutral-800 hover:bg-neutral-700 transition-colors p-4 rounded-lg border border-neutral-700 ${tTheme.text} font-bold text-sm uppercase tracking-widest shadow-inner`}>
+                  Upload Media Asset via Cloudinary
+                </button>
+                {imageUrl && <p className="text-xs text-emerald-400 mt-2 font-mono">✓ Media Linked: {imageUrl}</p>}
+              </div>
+
+              <button type="submit" disabled={loading} className={`w-full ${tTheme.bg} hover:opacity-80 transition-colors p-4 rounded-lg font-black text-black uppercase tracking-widest mt-4 shadow-lg disabled:opacity-50`}>
+                {loading ? "Deploying Node..." : "Deploy to Catalog"}
+              </button>
+            </form>
           </div>
         )}
 
-            
-            <div className="xl:col-span-8">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><Package className="text-orange-500"/> LIVE DATABANK</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {inventory.length === 0 ? <p className="text-gray-500 text-sm p-4 col-span-3">Catalog is empty.</p> : inventory.map((item: any) => (
-                  <div key={item.id} className="bg-[#161616] p-5 rounded-2xl border border-white/5 hover:border-orange-500/30 transition flex flex-col justify-between group relative overflow-hidden">
-                    {item.status === "Featured" && <div className="absolute top-0 right-0 bg-orange-500 text-black text-[8px] font-black px-2 py-1 rounded-bl-lg uppercase tracking-widest">Featured</div>}
+        {activeTab === "inventory" && (
+          <div className="max-w-4xl">
+            <h3 className={`text-xl font-bold mb-6 border-b border-neutral-800 pb-4 ${tTheme.text} uppercase tracking-wider`}>Active Inventory</h3>
+            <div className="grid grid-cols-1 gap-4">
+              {products.map((prod) => (
+                <div key={prod.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center shadow-md gap-4">
+                  <div className="flex items-center gap-4">
+                    {prod.imageUrl && <img src={prod.imageUrl} alt={prod.title} className="w-16 h-16 object-cover rounded-lg border border-neutral-800" />}
                     <div>
-                      <span className="text-[8px] bg-black px-2 py-1 rounded-md text-orange-500 uppercase tracking-widest border border-white/5 mb-2 inline-block max-w-full truncate">
-                        {item.category.split(' ')[0]} / {item.subCategory.split(' ')[0]}
-                      </span>
-                      <p className="font-bold text-sm leading-tight mt-1">{item.name}</p>
-                    </div>
-                    <div className="mt-4 flex justify-between items-end border-t border-white/5 pt-4">
-                      <p className="text-orange-500 font-mono text-sm font-bold">{item.price} ETB</p>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest bg-white/5 px-2 py-1 rounded-md">{item.stock} {item.unit}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ================= ORDERS TAB ================= */}
-        {activeTab === 'ORDERS' && (
-          <div className="max-w-6xl mx-auto">
-             <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><Clock className="text-orange-500"/> INCOMING DISPATCH REQUESTS</h2>
-             
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {orders.length === 0 ? <p className="text-gray-500 p-6 bg-[#161616] rounded-3xl border border-white/5">No active orders right now.</p> : orders.map((order: any) => (
-                <div key={order.id} className={`flex flex-col p-8 rounded-[2.5rem] border ${order.type === 'OFFICIAL' ? 'border-orange-500/40 bg-gradient-to-b from-orange-500/5 to-transparent' : 'border-white/10 bg-[#161616]'}`}>
-                  
-                  {/* Order Header: Price & Type */}
-                  <div className="flex justify-between items-start mb-6 border-b border-white/5 pb-6">
-                    <div>
-                        <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase ${order.type === 'OFFICIAL' ? 'bg-orange-500 text-black' : 'bg-white/10 text-white'}`}>{order.type} ORDER</span>
-                        <p className="text-xs text-gray-500 mt-3 font-mono">{new Date(order.createdAt).toLocaleString()}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="font-mono text-orange-500 font-black text-2xl">{Number(order.total || 0).toLocaleString()} ETB</p>
-                        {order.type === 'OFFICIAL' && <p className="text-[10px] text-gray-500 mt-1 uppercase">Includes {Number(order.vat || 0).toLocaleString()} ETB VAT</p>}
-                    </div>
-                  </div>
-
-                  {/* Client Data Block */}
-                  <div className="bg-black/40 p-5 rounded-2xl border border-white/5 mb-6 space-y-3">
-                    <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Client Logistics Info</p>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <p className="text-xs text-gray-400">Name</p>
-                            <p className="text-sm font-bold">{order.client?.name || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-gray-400">Phone</p>
-                            <p className="text-sm font-bold">{order.client?.phone || 'N/A'}</p>
-                        </div>
-                        <div className="col-span-2">
-                            <p className="text-xs text-gray-400">Delivery Address</p>
-                            <p className="text-sm font-bold">{order.client?.address || 'N/A'}</p>
-                        </div>
-                        {order.client?.tin && (
-                            <div className="col-span-2 border-t border-white/10 pt-3 mt-1">
-                                <p className="text-xs text-orange-500">Corporate TIN: <span className="font-bold text-white">{order.client.tin}</span></p>
-                            </div>
-                        )}
-                    </div>
-                  </div>
-
-                  {/* Items List */}
-                  <div className="flex-1 space-y-2">
-                    <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-3">Required Materials ({order.items?.length || 0} items)</p>
-                    {Array.isArray(order.items) && order.items.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center text-sm bg-white/5 p-3 rounded-xl border border-white/5">
-                        <div className="flex gap-3 items-center">
-                            <span className="bg-black text-white px-2 py-1 rounded-md text-[10px] font-bold">{item.qty || 1}x</span>
-                            <span className="font-bold text-gray-300">{item.name}</span>
-                        </div>
-                        <span className="text-orange-500 font-mono text-xs">{((item.price || 0) * (item.qty || 1)).toLocaleString()} ETB</span>
+                      <h4 className="font-bold text-neutral-100 text-lg">{prod.title}</h4>
+                      <p className="text-xs text-neutral-400 mt-1">{prod.menu} {prod.submenu && `➔ ${prod.submenu}`}</p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {prod.type && <span className="text-[10px] uppercase tracking-wider bg-neutral-800 px-2 py-1 rounded text-neutral-300">{prod.type}</span>}
+                        {prod.metric && <span className="text-[10px] uppercase tracking-wider bg-neutral-800 px-2 py-1 rounded text-neutral-300">{prod.metric}</span>}
+                        <span className={`text-[10px] uppercase tracking-wider ${tTheme.text} bg-neutral-800 px-2 py-1 rounded font-bold`}>{prod.price} ETB</span>
                       </div>
-                    ))}
+                    </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="mt-6 pt-6 border-t border-white/5 flex gap-3">
-                    <button className="flex-1 bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl text-xs font-bold transition">Mark as Processed</button>
-                    {order.client?.phone && <a href={`tel:${order.client.phone}`} className="flex-1 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 text-center py-3 rounded-xl text-xs font-bold transition flex items-center justify-center">Call Client</a>}
-                  </div>
-
+                  <button onClick={async () => {
+                    if(confirm("Confirm removal?")) { await fetch(`/api/inventory/${prod.id}`, { method: "DELETE" }); fetchInventory(); }
+                  }} className="bg-red-950/40 hover:bg-red-950 text-red-400 border border-red-900/50 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors w-full md:w-auto">
+                    Remove
+                  </button>
                 </div>
               ))}
             </div>
           </div>
         )}
+        
+        {activeTab === "orders" && (
+           <div className="max-w-4xl">
+             <h3 className={`text-xl font-bold mb-6 border-b border-neutral-800 pb-4 ${tTheme.text} uppercase tracking-wider`}>Active Orders</h3>
+             {orders.length === 0 ? (
+               <div className="bg-neutral-900 p-8 rounded-xl border border-neutral-800 text-center text-neutral-500">No active orders yet.</div>
+             ) : (
+               <div className="grid grid-cols-1 gap-6">
+                 {orders.map((order) => (
+                   <div key={order.id} className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-md">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className={`font-bold ${tTheme.text} text-lg`}>{order.customer?.name || "Guest Customer"}</h4>
+                          <p className="text-xs text-neutral-400 mt-1">
+                            {order.customer?.phone} 
+                            {order.customer?.company && order.customer?.company !== "N/A" && ` | ${order.customer?.company}`} 
+                            {order.customer?.tin && order.customer?.tin !== "N/A" && ` | TIN: ${order.customer?.tin}`}
+                          </p>
+                          <p className="text-xs text-emerald-500 mt-1 border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 rounded inline-block">
+                            {order.delivery?.method || "Store Pickup"}: {order.delivery?.address || "N/A"}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-3 py-1 rounded uppercase tracking-wider ${order.status === 'pending' || order.status === 'negotiation_requested' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-emerald-500/20 text-emerald-500'}`}>
+                          {order.status}
+                        </span>
+                      </div>
+                      <div className="border-t border-neutral-800 pt-4 space-y-3">
+                        {order.items?.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between text-sm items-center">
+                            <span className="text-neutral-300"><span className={`${tTheme.text} font-bold mr-2`}>{item.quantity}x</span> {item.title || "Material"}</span>
+                            <span className="text-neutral-500 text-xs">{item.price} ETB</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t border-neutral-800 mt-6 pt-4 flex justify-between items-center font-bold">
+                        <span className="text-neutral-500 uppercase tracking-widest text-xs">Total Amount</span>
+                        <span className={`${tTheme.text} text-xl`}>{order.total} ETB</span>
+                      </div>
+                   </div>
+                 ))}
+               </div>
+             )}
+           </div>
+        )}
 
-        {/* ================= SETTINGS TAB ================= */}
-        {activeTab === 'SETTINGS' && (
-          <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-8">
-              <div className="bg-[#161616] p-8 rounded-[2.5rem] border border-white/5">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-3"><Palette className="text-orange-500"/> CLIENT UI THEME</h3>
-                <p className="text-xs text-gray-400 mb-4">Change the primary accent color for the public-facing storefront.</p>
-                <div className="flex gap-4">
-                  <button onClick={() => updateTheme('orange')} className={`w-12 h-12 rounded-full bg-orange-500 transition ${theme === 'orange' ? 'ring-4 ring-white/30 scale-110' : 'hover:scale-110'}`}></button>
-                  <button onClick={() => updateTheme('blue')} className={`w-12 h-12 rounded-full bg-blue-500 transition ${theme === 'blue' ? 'ring-4 ring-white/30 scale-110' : 'hover:scale-110'}`}></button>
-                  <button onClick={() => updateTheme('green')} className={`w-12 h-12 rounded-full bg-green-500 transition ${theme === 'green' ? 'ring-4 ring-white/30 scale-110' : 'hover:scale-110'}`}></button>
+        {activeTab === "settings" && (
+          <div className="max-w-3xl space-y-8">
+            <div className="bg-neutral-900 p-8 rounded-xl border border-neutral-800 shadow-xl">
+              <h3 className={`text-xl font-bold mb-6 border-b border-neutral-800 pb-4 ${tTheme.text} uppercase tracking-wider`}>Global Brand Configuration</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-neutral-500 font-bold mb-2">Global Color Theme</label>
+                  <select value={appTheme} onChange={(e)=>setAppTheme(e.target.value)} className={`w-full bg-black p-3 border border-neutral-800 rounded-lg text-white outline-none ${tTheme.focus}`}>
+                    <option value="amber">AmanZone Amber (Default)</option>
+                    <option value="crimson">Industrial Crimson</option>
+                    <option value="cobalt">Steel Cobalt</option>
+                    <option value="emerald">Eco Emerald</option>
+                    <option value="violet">Royal Violet</option>
+                  </select>
                 </div>
               </div>
-
-              <div className="bg-[#161616] p-8 rounded-[2.5rem] border border-white/5">
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-3"><LayoutTemplate className="text-orange-500"/> CLIENT UI LAYOUT</h3>
-                <p className="text-xs text-gray-400 mb-4">Choose how the product catalog is displayed to customers.</p>
-                <div className="flex gap-4">
-                  <button onClick={() => updateLayout('grid')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition ${layout === 'grid' ? 'bg-white text-black' : 'bg-black border border-white/10'}`}>Grid View</button>
-                  <button onClick={() => updateLayout('list')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition ${layout === 'list' ? 'bg-white text-black' : 'bg-black border border-white/10'}`}>List View</button>
-                </div>
-              </div>
+              <button onClick={handleSaveTheme} className={`mt-6 ${tTheme.bg} text-black px-6 py-3 rounded-lg text-sm font-bold uppercase tracking-wider hover:opacity-80 transition-colors`}>
+                Save & Broadcast Theme
+              </button>
             </div>
 
-            <div className="bg-[#161616] p-8 rounded-[2.5rem] border border-white/5 h-fit">
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-3"><Key className="text-orange-500"/> SECURITY & AUTH</h3>
-              <p className="text-xs text-gray-400 mb-6 leading-relaxed">Your master password is currently secured in the server-side environment variables.</p>
-              <div className="space-y-4 opacity-50 cursor-not-allowed grayscale">
-                <input disabled type="password" placeholder="Current Password" className="w-full bg-black border border-white/10 p-4 rounded-xl text-sm outline-none" />
-                <input disabled type="password" placeholder="New Password" className="w-full bg-black border border-white/10 p-4 rounded-xl text-sm outline-none" />
-                <button disabled className="w-full bg-white text-black font-black py-4 rounded-xl uppercase tracking-widest text-xs">Update Credentials</button>
-              </div>
+            <div className="bg-neutral-900 p-8 rounded-xl border border-neutral-800 shadow-xl">
+              <h3 className={`text-xl font-bold mb-6 border-b border-neutral-800 pb-4 ${tTheme.text} uppercase tracking-wider`}>Security Control</h3>
+              <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-md">
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-neutral-500 font-bold mb-2">Current Access Key</label>
+                  <input type="password" value={currentPassword} onChange={(e)=>setCurrentPassword(e.target.value)} required className={`w-full bg-black p-3 border border-neutral-800 rounded-lg text-white outline-none ${tTheme.focus}`}/>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-neutral-500 font-bold mb-2">New Access Key</label>
+                  <input type="password" value={newPassword} onChange={(e)=>setNewPassword(e.target.value)} required className={`w-full bg-black p-3 border border-neutral-800 rounded-lg text-white outline-none ${tTheme.focus}`}/>
+                </div>
+                <button type="submit" disabled={settingsLoading} className={`${tTheme.bg} hover:opacity-80 text-black px-6 py-3 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors disabled:opacity-50`}>
+                  {settingsLoading ? "Updating..." : "Update Security Key"}
+                </button>
+              </form>
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
