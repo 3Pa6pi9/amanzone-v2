@@ -1,32 +1,47 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
+  /* Default: Dark Industrial (AmanZone Standard) */
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg-primary: #12121A;
+    --bg-secondary: #161622;
+    --bg-tertiary: #1E1E2C;
+    --accent: #6C63FF;
+    --accent-hover: #5a52d9;
+    --text-main: #FFFFFF;
+    --text-muted: #9CA3AF;
+    --border-color: #27273A;
+  }
+
+  /* Theme: Executive Command (Clean, Slate, Professional) */
+  [data-theme='executive'] {
+    --bg-primary: #0F172A;
+    --bg-secondary: #1E293B;
+    --bg-tertiary: #334155;
+    --accent: #38BDF8;
+    --accent-hover: #0284C7;
+    --text-main: #F8FAFC;
+    --text-muted: #CBD5E1;
+    --border-color: #475569;
+  }
+
+  /* Theme: Light Corporate (For daytime office viewing) */
+  [data-theme='light'] {
+    --bg-primary: #F8FAFC;
+    --bg-secondary: #FFFFFF;
+    --bg-tertiary: #F1F5F9;
+    --accent: #2563EB;
+    --accent-hover: #1D4ED8;
+    --text-main: #0F172A;
+    --text-muted: #64748B;
+    --border-color: #E2E8F0;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer components {
-  .admin-input {
-    @apply w-full p-3 bg-white border-2 border-slate-100 rounded-xl outline-none focus:border-blue-600 transition-all font-medium;
-  }
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
