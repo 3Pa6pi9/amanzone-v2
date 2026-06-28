@@ -6,7 +6,8 @@ import { useLanguage } from "@/lib/Providers";
 
 export default function AIAssistant({ isAdmin = false }: { isAdmin?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
-  const { t } = useLanguage();
+ const { language } = useLanguage();
+ const t = (en: string, am: string) => (language === "EN" ? en : am);
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
