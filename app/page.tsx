@@ -325,9 +325,12 @@ export default function PremiumStorefront() {
                     </div>
                   )}
 
+                  {/* SPECIFICATION BADGES (INCLUDING SIZE AND COLOR) */}
                   <div className="flex flex-wrap gap-2 mb-3">
                     <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-white/10 uppercase tracking-wider">{item.menu || "Material"}</span>
                     {item.metric && <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-black/50 border border-white/10 uppercase tracking-wider text-gray-400">{item.metric}</span>}
+                    {item.size && <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 uppercase tracking-wider">Sz: {item.size}</span>}
+                    {item.color && <span className="text-[9px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 uppercase tracking-wider">Clr: {item.color}</span>}
                   </div>
                   
                   <h4 className="text-xl font-bold mb-1 group-hover:text-white transition-colors line-clamp-2">{item.title || "Unnamed Material"}</h4>
@@ -437,11 +440,20 @@ export default function PremiumStorefront() {
                         <div className="w-16 h-16 rounded-xl bg-black/50 border border-white/5 overflow-hidden flex-shrink-0">
                           {item.imageUrl ? <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-4 opacity-30" />}
                         </div>
+                        
+                        {/* CART DETAILS WITH SIZE AND COLOR */}
                         <div className="flex-1">
-                          <h4 className="font-bold text-sm mb-1 line-clamp-1">{item.title}</h4>
-                          <p className="text-xs opacity-50 mb-2">{(parseFloat(item.price) || 0).toLocaleString()} ETB</p>
+                          <h4 className="font-bold text-sm mb-0.5 line-clamp-1">{item.title}</h4>
                           
-                          {/* NEW MANUAL QUANTITY INPUT */}
+                          {(item.size || item.color) && (
+                            <p className="text-[9px] uppercase tracking-widest opacity-50 mb-1">
+                              {item.size && <span className="mr-2">[{item.size}]</span>}
+                              {item.color && <span>[{item.color}]</span>}
+                            </p>
+                          )}
+                          
+                          <p className="text-xs opacity-70 mb-2">{(parseFloat(item.price) || 0).toLocaleString()} ETB</p>
+                          
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">QTY:</span>
                             <input 
@@ -453,6 +465,7 @@ export default function PremiumStorefront() {
                             />
                           </div>
                         </div>
+                        
                         <div className="flex flex-col items-end justify-between h-full py-1">
                           <button onClick={() => removeFromCart(item.id)} className="text-red-400/50 hover:text-red-400 transition-colors mb-2"><Trash2 size={16} /></button>
                           <span className="font-black text-emerald-400 text-sm">{((parseFloat(item.price) || 0) * item.quantity).toLocaleString()}</span>
