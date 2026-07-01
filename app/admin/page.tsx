@@ -9,8 +9,29 @@ import {
   TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu
 } from "lucide-react";
 
+// --- THE PREDEFINED ETHIOPIAN MATERIAL MATRIX ---
+const PREDEFINED_MATRIX: Record<string, string[]> = {
+  "የግንባታ ብረት": ["የሀገር ውስጥ", "የቱርክ ብረት"],
+  "ቆርቆሮ": ["መደበኛ ቆርቆሮ", "ኤጋ ቆርቆሮ", "ታይልስ ቆርቆሮ"],
+  "ጂብሰም ቦርድ": ["የውሃ ስርገት የሚከላከል", "የድምፅ ስርገት የሚከላከል", "መገጣጠሚያዎች"],
+  "የኮርኒስ ንጣፍ": ["ፒ.ቪ.ሲ", "Armstrong (አርምስትሮንግ)", "Acrostic (አኮስቲክ)", "መገጣጠሚያዎች"],
+  "ጣውላ": ["አውስትራሊያ", "ሻሸመኔ"],
+  "MDF": ["የተለጠፈ (Laminated)", "መደበኛ"],
+  "ትቦላሬ": [
+    "RHS (Rectangular Hallow Section)",
+    "CHS (Circular Hallow Section)",
+    "SHS (Square Hallow Section)",
+    "ቶንዲኖ (Round Bar)",
+    "ፊያቶ (Flat Iron)",
+    "አንግል (Angel Iron)",
+    "ኤል.ቲ.ዜድ (LTZ)",
+    "ላሜራ"
+  ]
+};
+
 const initialFormState = {
-  title: "", price: "", description: "", menu: "", submenu: "", type: "Standard", 
+  title: "", price: "", description: "", 
+  menu: "የግንባታ ብረት", submenu: "የሀገር ውስጥ", type: "Standard", 
   metric: "", size: "", color: "", imageUrl: "", stock: "", warehouse: ""
 };
 
@@ -60,8 +81,14 @@ export default function AdminCommandCenter() {
     setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000);
   };
 
-  const uniqueMenus = useMemo(() => Array.from(new Set(products.map(p => p.menu).filter(Boolean))), [products]);
-  const uniqueSubmenus = useMemo(() => Array.from(new Set(products.filter(p => p.menu === formData.menu).map(p => p.submenu).filter(Boolean))), [products, formData.menu]);
+  // --- DYNAMIC EXTRACTIONS (MERGING FIREBASE DATA WITH HARDCODED MATRIX) ---
+  const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
+  const uniqueSubmenus = useMemo(() => {
+    const predefined = PREDEFINED_MATRIX[formData.menu] || [];
+    const fromDb = products.filter(p => p.menu === formData.menu).map(p => p.submenu).filter(Boolean);
+    return Array.from(new Set([...predefined, ...fromDb]));
+  }, [products, formData.menu]);
+  
   const uniqueTypes = useMemo(() => Array.from(new Set(products.filter(p => p.submenu === formData.submenu).map(p => p.type).filter(Boolean))), [products, formData.submenu]);
   const uniqueMetrics = useMemo(() => Array.from(new Set(products.map(p => p.metric).filter(Boolean))), [products]);
   const uniqueSizes = useMemo(() => Array.from(new Set(products.map(p => p.size).filter(Boolean))), [products]);
@@ -70,7 +97,7 @@ export default function AdminCommandCenter() {
 
   const openAddMenu = () => {
     setFormData(initialFormState); setEditingId(null);
-    setIsNewMenu(uniqueMenus.length === 0); setIsNewSubmenu(true); setIsNewType(true);
+    setIsNewMenu(false); setIsNewSubmenu(false); setIsNewType(true);
     setIsNewMetric(uniqueMetrics.length === 0); setIsNewSize(uniqueSizes.length === 0);
     setIsNewColor(uniqueColors.length === 0); setIsNewWarehouse(uniqueWarehouses.length === 0);
     setIsDrawerOpen(true);
@@ -113,12 +140,10 @@ export default function AdminCommandCenter() {
     }
   };
 
-  // BULLETPROOF SAVE FUNCTION
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // 100% strict sanitization to prevent Firebase rejections
       const payload = { 
         title: formData.title || "Untitled",
         price: formData.price?.toString() || "0",
@@ -146,7 +171,6 @@ export default function AdminCommandCenter() {
       
     } catch (error: any) {
       console.error("FIREBASE ERROR:", error);
-      // This will now output the exact Firebase error so we know what is breaking
       showToast(`Error: ${error.message || "Unknown database error"}`, "error");
     } finally {
       setIsSaving(false);
