@@ -10,6 +10,26 @@ import {
   MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu
 } from "lucide-react";
 
+// --- THE PREDEFINED ETHIOPIAN MATERIAL MATRIX ---
+const PREDEFINED_MATRIX: Record<string, string[]> = {
+  "የግንባታ ብረት": ["የሀገር ውስጥ", "የቱርክ ብረት"],
+  "ቆርቆሮ": ["መደበኛ ቆርቆሮ", "ኤጋ ቆርቆሮ", "ታይልስ ቆርቆሮ"],
+  "ጂብሰም ቦርድ": ["የውሃ ስርገት የሚከላከል", "የድምፅ ስርገት የሚከላከል", "መገጣጠሚያዎች"],
+  "የኮርኒስ ንጣፍ": ["ፒ.ቪ.ሲ", "Armstrong (አርምስትሮንግ)", "Acrostic (አኮስቲክ)", "መገጣጠሚያዎች"],
+  "ጣውላ": ["አውስትራሊያ", "ሻሸመኔ"],
+  "MDF": ["የተለጠፈ (Laminated)", "መደበኛ"],
+  "ትቦላሬ": [
+    "RHS (Rectangular Hallow Section)",
+    "CHS (Circular Hallow Section)",
+    "SHS (Square Hallow Section)",
+    "ቶንዲኖ (Round Bar)",
+    "ፊያቶ (Flat Iron)",
+    "አንግል (Angel Iron)",
+    "ኤል.ቲ.ዜድ (LTZ)",
+    "ላሜራ"
+  ]
+};
+
 export default function PremiumStorefront() {
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -70,16 +90,29 @@ export default function PremiumStorefront() {
     return () => unsubscribe();
   }, []);
 
+  // --- DYNAMICALLY MERGE PREDEFINED MATRIX WITH ACTIVE PRODUCTS ---
   const catalogTree = useMemo(() => {
     const tree: any = {};
+    
+    // 1. Initialize with the hardcoded matrix so empty categories still show up
+    Object.keys(PREDEFINED_MATRIX).forEach(menu => {
+      tree[menu] = {};
+      PREDEFINED_MATRIX[menu].forEach(submenu => {
+        tree[menu][submenu] = new Set();
+      });
+    });
+
+    // 2. Populate actual products (adds custom types and custom menus if created)
     products.forEach(p => {
       const m = p.menu || "Uncategorized";
       const sm = p.submenu || "General";
       const tType = p.type || "Standard";
+      
       if (!tree[m]) tree[m] = {};
       if (!tree[m][sm]) tree[m][sm] = new Set();
       tree[m][sm].add(tType);
     });
+    
     return tree;
   }, [products]);
 
@@ -431,163 +464,188 @@ export default function PremiumStorefront() {
             <button onClick={() => {setIsCartOpen(false); setCheckoutStep(1);}} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={18} /></button>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide">
-            {checkoutStep === 1 && (
-              <div className="space-y-4 h-full flex flex-col">
-                {cartItems.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center opacity-30 space-y-4">
-                    <ShoppingCart size={48} className="md:w-16 md:h-16" />
-                    <p className="font-bold text-sm md:text-base">{t("Pipeline empty.", "ቅርጫቱ ባዶ ነው።")}</p>
-                  </div>
-                ) : (
-                  <div className="flex-1 space-y-3 md:space-y-4">
-                    {cartItems.map(item => (
-                      <div key={item.id} className="flex gap-3 md:gap-4 items-center bg-[#111111] border border-white/10 p-2.5 md:p-3 rounded-2xl">
-                        <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black/50 border border-white/5 overflow-hidden flex-shrink-0">
-                          {item.imageUrl ? <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-3 opacity-30" />}
-                        </div>
-                        
-                        <div className="flex-1">
-                          <h4 className="font-bold text-xs md:text-sm mb-0.5 line-clamp-1">{item.title}</h4>
+          {checkoutStep === 1 ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide">
+                <div className="space-y-4 h-full flex flex-col">
+                  {cartItems.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center opacity-30 space-y-4">
+                      <ShoppingCart size={48} className="md:w-16 md:h-16" />
+                      <p className="font-bold text-sm md:text-base">{t("Pipeline empty.", "ቅርጫቱ ባዶ ነው።")}</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 space-y-3 md:space-y-4">
+                      {cartItems.map(item => (
+                        <div key={item.id} className="flex gap-3 md:gap-4 items-center bg-[#111111] border border-white/10 p-2.5 md:p-3 rounded-2xl">
+                          <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black/50 border border-white/5 overflow-hidden flex-shrink-0">
+                            {item.imageUrl ? <img src={item.imageUrl} alt={item.title} loading="lazy" decoding="async" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-3 opacity-30" />}
+                          </div>
                           
-                          {(item.size || item.color) && (
-                            <p className="text-[8px] md:text-[9px] uppercase tracking-widest opacity-50 mb-1">
-                              {item.size && <span className="mr-2">[{item.size}]</span>}
-                              {item.color && <span>[{item.color}]</span>}
-                            </p>
-                          )}
+                          <div className="flex-1">
+                            <h4 className="font-bold text-xs md:text-sm mb-0.5 line-clamp-1">{item.title}</h4>
+                            
+                            {(item.size || item.color) && (
+                              <p className="text-[8px] md:text-[9px] uppercase tracking-widest opacity-50 mb-1">
+                                {item.size && <span className="mr-2">[{item.size}]</span>}
+                                {item.color && <span>[{item.color}]</span>}
+                              </p>
+                            )}
+                            
+                            <p className="text-[10px] md:text-xs opacity-70 mb-1 md:mb-2">{(parseFloat(item.price) || 0).toLocaleString()} ETB</p>
+                            
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] md:text-[10px] font-bold opacity-50 uppercase tracking-widest">QTY:</span>
+                              <input 
+                                type="number" min="1" value={item.quantity || 1} 
+                                onChange={(e) => updateCartQuantity(item.id, parseInt(e.target.value) || 1)}
+                                className="w-14 md:w-16 px-1 md:px-2 py-0.5 bg-black border border-white/10 rounded text-[10px] md:text-xs font-bold text-center outline-none focus:border-[var(--accent)]"
+                              />
+                            </div>
+                          </div>
                           
-                          <p className="text-[10px] md:text-xs opacity-70 mb-1 md:mb-2">{(parseFloat(item.price) || 0).toLocaleString()} ETB</p>
-                          
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] md:text-[10px] font-bold opacity-50 uppercase tracking-widest">QTY:</span>
-                            <input 
-                              type="number" min="1" value={item.quantity || 1} 
-                              onChange={(e) => updateCartQuantity(item.id, parseInt(e.target.value) || 1)}
-                              className="w-14 md:w-16 px-1 md:px-2 py-0.5 bg-black border border-white/10 rounded text-[10px] md:text-xs font-bold text-center outline-none focus:border-[var(--accent)]"
-                            />
+                          <div className="flex flex-col items-end justify-between h-full py-1">
+                            <button onClick={() => removeFromCart(item.id)} className="text-red-400/50 hover:text-red-400 transition-colors mb-2 p-1"><Trash2 size={14} /></button>
+                            <span className="font-black text-emerald-400 text-xs md:text-sm">{((parseFloat(item.price) || 0) * item.quantity).toLocaleString()}</span>
                           </div>
                         </div>
-                        
-                        <div className="flex flex-col items-end justify-between h-full py-1">
-                          <button onClick={() => removeFromCart(item.id)} className="text-red-400/50 hover:text-red-400 transition-colors mb-2 p-1"><Trash2 size={14} /></button>
-                          <span className="font-black text-emerald-400 text-xs md:text-sm">{((parseFloat(item.price) || 0) * item.quantity).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {checkoutStep === 2 && (
-              <form id="checkout-form" onSubmit={handleCheckout} className="space-y-6 md:space-y-8 animate-in slide-in-from-right-4 pb-10">
-                
-                <div className="space-y-3 md:space-y-4">
-                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Billing Identity</h3>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
-                    <input type="text" required placeholder="Authorized Representative Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" />
-                  </div>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
-                    <input type="tel" required placeholder="Active Phone Number (e.g. 0911...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" />
-                  </div>
-                  
-                  <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-black/30 space-y-3 md:space-y-4">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input type="checkbox" checked={formData.requireVat} onChange={e => setFormData({...formData, requireVat: e.target.checked})} className="w-4 h-4 md:w-5 md:h-5 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500 bg-white/10" />
-                      <span className="text-xs md:text-sm font-bold">Require Corporate Invoice (+15% VAT)</span>
-                    </label>
-                    
-                    {formData.requireVat && (
-                      <div className="space-y-3 pt-2 animate-in fade-in zoom-in-95">
-                        <div className="relative">
-                          <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
-                          <input type="text" required placeholder="Registered Company Name" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" />
-                        </div>
-                        <div className="relative">
-                          <FileText className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
-                          <input type="text" required placeholder="TIN Number (10 Digits)" value={formData.tinNumber} onChange={e => setFormData({...formData, tinNumber: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-mono tracking-widest" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-3 md:space-y-4">
-                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Deployment Strategy</h3>
-                  <div className="grid grid-cols-2 gap-2 md:gap-3">
-                    <button type="button" onClick={() => setDeliveryType("Delivery")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Delivery" ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
-                      <Truck size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Site Delivery</span>
-                    </button>
-                    <button type="button" onClick={() => setDeliveryType("Warehouse Pickup")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Warehouse Pickup" ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
-                      <Building2 size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Self Pickup</span>
-                    </button>
-                  </div>
-                </div>
-
-                {deliveryType === "Delivery" && (
-                  <div className="space-y-3 md:space-y-4 animate-in fade-in">
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
-                      <select required value={formData.region} onChange={e => setFormData({...formData, region: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-black border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm appearance-none">
-                        <option value="" disabled>Select Region</option>
-                        {ethiopianRegions.map(r => <option key={r} value={r}>{r}</option>)}
-                      </select>
+                      ))}
                     </div>
-                    {formData.region === "Addis Ababa" && (
-                      <div className="relative">
-                        <LocateFixed className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
-                        <select required value={formData.subCity} onChange={e => setFormData({...formData, subCity: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-black border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm appearance-none">
-                          <option value="" disabled>Select Sub-City</option>
-                          {addisSubcities.map(sc => <option key={sc} value={sc}>{sc}</option>)}
-                        </select>
-                      </div>
-                    )}
-                    <textarea required placeholder="Specific site directions / Google Maps Link" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm resize-none"></textarea>
-                    <p className="text-[9px] md:text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center mt-2 flex items-center justify-center gap-1 md:gap-2"><Truck size={10} className="md:w-3 md:h-3"/> Delivery cost calculated post-inspection.</p>
-                  </div>
-                )}
-              </form>
-            )}
-          </div>
-
-          <div className="p-4 md:p-6 bg-black/90 border-t border-white/10">
-            {checkoutStep === 2 && formData.requireVat && (
-              <div className="flex justify-between items-center text-xs md:text-sm opacity-70 mb-2 border-b border-white/5 pb-2">
-                <span>Subtotal</span>
-                <span>{cartSubtotal.toLocaleString()} ETB</span>
+                  )}
+                </div>
               </div>
-            )}
-            {checkoutStep === 2 && formData.requireVat && (
-              <div className="flex justify-between items-center text-xs md:text-sm text-emerald-400 mb-3 md:mb-4">
-                <span>VAT (15%)</span>
-                <span>+ {vatAmount.toLocaleString()} ETB</span>
-              </div>
-            )}
-            
-            <div className="flex justify-between items-end mb-4">
-              <span className="opacity-50 font-medium uppercase tracking-widest text-[10px] md:text-xs">Total Pipeline</span>
-              <span className="text-xl md:text-2xl font-black">{cartTotal.toLocaleString()} ETB</span>
-            </div>
-            
-            {checkoutStep === 1 ? (
-              <button onClick={() => setCheckoutStep(2)} className="w-full py-3 md:py-4 rounded-xl text-white font-black uppercase tracking-widest text-xs md:text-sm transition-transform active:scale-95 flex items-center justify-center gap-2 md:gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]" style={{ backgroundColor: 'var(--accent)' }}>
-                Configure Logistics <ArrowRight size={16} />
-              </button>
-            ) : (
-              <div className="flex gap-2 md:gap-3">
-                <button type="button" onClick={() => setCheckoutStep(1)} className="px-4 py-3 md:px-6 md:py-4 rounded-xl border border-white/10 bg-white/5 text-xs md:text-sm font-bold hover:bg-white/10">Back</button>
-                <button type="submit" form="checkout-form" disabled={isCheckingOut} className="flex-1 py-3 md:py-4 rounded-xl text-black bg-white font-black uppercase tracking-widest text-xs md:text-sm transition-transform active:scale-95 flex items-center justify-center gap-2 md:gap-3 shadow-xl">
-                  {isCheckingOut ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
-                  {isCheckingOut ? "Connecting..." : "Pay via Chapa"}
+              <div className="p-4 md:p-6 bg-black/90 border-t border-white/10 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] z-10">
+                <div className="flex justify-between items-end mb-4">
+                  <span className="opacity-50 font-medium uppercase tracking-widest text-[10px] md:text-xs">Total Pipeline</span>
+                  <span className="text-xl md:text-2xl font-black">{cartTotal.toLocaleString()} ETB</span>
+                </div>
+                <button onClick={() => setCheckoutStep(2)} className="w-full py-3 md:py-4 rounded-xl text-white font-black uppercase tracking-widest text-xs md:text-sm transition-transform active:scale-95 flex items-center justify-center gap-2 md:gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]" style={{ backgroundColor: 'var(--accent)' }}>
+                  Configure Logistics <ArrowRight size={16} />
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            // FORM WRAPS THE SCROLLING AREA AND THE FOOTER BUTTONS
+            <form id="checkout-form" onSubmit={handleCheckout} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide">
+                <div className="space-y-6 md:space-y-8 animate-in slide-in-from-right-4 pb-4">
+                  
+                  <div className="space-y-3 md:space-y-4">
+                    <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Billing Identity</h3>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                      <input type="text" required placeholder="Authorized Representative Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" />
+                    </div>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                      <input type="tel" required placeholder="Active Phone Number (e.g. 0911...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" />
+                    </div>
+                    
+                    <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-black/30 space-y-3 md:space-y-4">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={formData.requireVat} onChange={e => setFormData({...formData, requireVat: e.target.checked})} className="w-4 h-4 md:w-5 md:h-5 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500 bg-white/10" />
+                        <span className="text-xs md:text-sm font-bold">Require Corporate Invoice (+15% VAT)</span>
+                      </label>
+                      
+                      {formData.requireVat && (
+                        <div className="space-y-3 pt-2 animate-in fade-in zoom-in-95">
+                          <div className="relative">
+                            <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                            <input type="text" required placeholder="Registered Company Name" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" />
+                          </div>
+                          <div className="relative">
+                            <FileText className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                            <input type="text" required placeholder="TIN Number (10 Digits)" value={formData.tinNumber} onChange={e => setFormData({...formData, tinNumber: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-mono tracking-widest" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 md:space-y-4">
+                    <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Deployment Strategy</h3>
+                    <div className="grid grid-cols-2 gap-2 md:gap-3">
+                      <button type="button" onClick={() => setDeliveryType("Delivery")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Delivery" ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
+                        <Truck size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Site Delivery</span>
+                      </button>
+                      <button type="button" onClick={() => setDeliveryType("Warehouse Pickup")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Warehouse Pickup" ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
+                        <Building2 size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Self Pickup</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {deliveryType === "Delivery" && (
+                    <div className="space-y-3 md:space-y-4 animate-in fade-in">
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                        <select required value={formData.region} onChange={e => setFormData({...formData, region: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-black border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm appearance-none">
+                          <option value="" disabled>Select Region</option>
+                          {ethiopianRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+                      </div>
+                      {formData.region === "Addis Ababa" && (
+                        <div className="relative">
+                          <LocateFixed className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                          <select required value={formData.subCity} onChange={e => setFormData({...formData, subCity: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-black border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm appearance-none">
+                            <option value="" disabled>Select Sub-City</option>
+                            {addisSubcities.map(sc => <option key={sc} value={sc}>{sc}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <textarea required placeholder="Specific site directions / Google Maps Link" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm resize-none"></textarea>
+                      <p className="text-[9px] md:text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center mt-2 flex items-center justify-center gap-1 md:gap-2"><Truck size={10} className="md:w-3 md:h-3"/> Delivery cost calculated post-inspection.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-4 md:p-6 bg-black/90 border-t border-white/10 shadow-[0_-10px_30px_rgba(0,0,0,0.8)] z-10">
+                {formData.requireVat && (
+                  <>
+                    <div className="flex justify-between items-center text-xs md:text-sm opacity-70 mb-2 border-b border-white/5 pb-2">
+                      <span>Subtotal</span>
+                      <span>{cartSubtotal.toLocaleString()} ETB</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs md:text-sm text-emerald-400 mb-3 md:mb-4">
+                      <span>VAT (15%)</span>
+                      <span>+ {vatAmount.toLocaleString()} ETB</span>
+                    </div>
+                  </>
+                )}
+                
+                <div className="flex justify-between items-end mb-4">
+                  <span className="opacity-50 font-medium uppercase tracking-widest text-[10px] md:text-xs">Total Pipeline</span>
+                  <span className="text-xl md:text-2xl font-black">{cartTotal.toLocaleString()} ETB</span>
+                </div>
+                
+                <div className="flex gap-2 md:gap-3">
+                  <button type="button" onClick={() => setCheckoutStep(1)} className="px-4 py-3 md:px-6 md:py-4 rounded-xl border border-white/10 bg-white/5 text-xs md:text-sm font-bold hover:bg-white/10">Back</button>
+                  <button type="submit" disabled={isCheckingOut} className="flex-1 py-3 md:py-4 rounded-xl text-black bg-white font-black uppercase tracking-widest text-xs md:text-sm transition-transform active:scale-95 flex items-center justify-center gap-2 md:gap-3 shadow-xl">
+                    {isCheckingOut ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                    {isCheckingOut ? "Connecting..." : "Pay via Chapa"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
         </div>
       </div>
+
+      {/* Enterprise Footer */}
+      <footer className="relative z-10 border-t border-white/10 bg-black/80 pt-20 pb-10 mt-20 transform-gpu">
+        <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+          <div className="md:col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white" style={{ backgroundColor: 'var(--accent)' }}>AZ</div>
+              <h2 className="text-xl font-black tracking-tighter">AmanZone Trading PLC</h2>
+            </div>
+            <p className="opacity-50 text-sm max-w-sm leading-relaxed mb-6">Ethiopia's premier logistics and supply matrix for industrial-grade construction materials. Deployed with precision, secured by technology.</p>
+          </div>
+        </div>
+        <div className="max-w-[1400px] mx-auto px-6 pt-8 border-t border-white/5 text-center flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-xs opacity-30 font-bold uppercase tracking-widest">© 2026 AmanZone Trading PLC.</p>
+        </div>
+      </footer>
     </div>
   );
 }
