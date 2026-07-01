@@ -49,7 +49,7 @@ export default function AdminCommandCenter() {
 
   useEffect(() => {
     const qInv = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
-    const unsubInv = onSnapshot(qInv, (snapshot) => { setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setLoading(false); });
+    const unsubInv = onSnapshot(qInv, (snapshot) => { setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setLoading(false); }, (error) => { console.error("Inventory error:", error); setLoading(false); });
     const qOrders = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => { setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
     return () => { unsubInv(); unsubOrders(); };
@@ -57,7 +57,7 @@ export default function AdminCommandCenter() {
 
   const showToast = (msg: string, type = "success") => {
     setToast({ show: true, msg, type });
-    setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 3000);
+    setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000);
   };
 
   const uniqueMenus = useMemo(() => Array.from(new Set(products.map(p => p.menu).filter(Boolean))), [products]);
@@ -113,40 +113,41 @@ export default function AdminCommandCenter() {
     }
   };
 
+  // BULLETPROOF SAVE FUNCTION
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      // BULLETPROOF SANITIZATION to prevent "undefined" Firebase errors
-      const payload: any = { 
-        title: formData.title?.trim() || "Untitled",
-        price: formData.price?.toString().trim() || "0",
-        description: formData.description?.trim() || "",
-        menu: formData.menu?.trim() || "Uncategorized",
-        submenu: formData.submenu?.trim() || "General",
-        type: formData.type?.trim() || "Standard",
-        metric: formData.metric?.trim() || "Unit",
-        size: formData.size?.trim() || "",
-        color: formData.color?.trim() || "",
-        imageUrl: formData.imageUrl?.trim() || "",
+      // 100% strict sanitization to prevent Firebase rejections
+      const payload = { 
+        title: formData.title || "Untitled",
+        price: formData.price?.toString() || "0",
+        description: formData.description || "",
+        menu: formData.menu || "Uncategorized",
+        submenu: formData.submenu || "General",
+        type: formData.type || "Standard",
+        metric: formData.metric || "Unit",
+        size: formData.size || "",
+        color: formData.color || "",
+        imageUrl: formData.imageUrl || "",
         stock: parseInt(formData.stock as string) || 0,
-        warehouse: formData.warehouse?.trim() || "Main Hub",
+        warehouse: formData.warehouse || "Main Hub",
         updatedAt: new Date().toISOString() 
       };
-      
-      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
       if (editingId) {
         await updateDoc(doc(db, "inventory", editingId), payload);
-        showToast("Material updated.");
+        showToast("Material updated successfully.");
       } else {
         await addDoc(collection(db, "inventory"), { ...payload, createdAt: new Date().toISOString() });
-        showToast("New material deployed.");
+        showToast("New material deployed successfully.");
       }
       setIsDrawerOpen(false);
+      
     } catch (error: any) {
-      console.error(error);
-      showToast(error.message || "System error during save.", "error");
+      console.error("FIREBASE ERROR:", error);
+      // This will now output the exact Firebase error so we know what is breaking
+      showToast(`Error: ${error.message || "Unknown database error"}`, "error");
     } finally {
       setIsSaving(false);
     }
@@ -288,7 +289,6 @@ export default function AdminCommandCenter() {
                   filteredProducts.map((product) => (
                     <div key={product.id} className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 p-4 items-center hover:bg-white/5 transition-colors">
                       
-                      {/* Mobile Stacked Card Look */}
                       <div className="col-span-1 lg:col-span-4 flex items-start lg:items-center gap-3">
                         <div className="w-12 h-12 md:w-10 md:h-10 rounded-lg bg-black border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center">
                           {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover" /> : <ImageIcon size={16} className="opacity-30" />}
@@ -303,7 +303,6 @@ export default function AdminCommandCenter() {
                         </div>
                       </div>
                       
-                      {/* Desktop Specific Grid Layout */}
                       <div className="hidden lg:block lg:col-span-2">
                         <div className="flex items-center gap-1.5 mb-1">
                           <MapPin size={12} className="text-emerald-400" />
@@ -324,7 +323,6 @@ export default function AdminCommandCenter() {
                         <p className="text-[10px] opacity-50 uppercase tracking-widest mt-0.5">Per {product.metric || "Unit"}</p>
                       </div>
 
-                      {/* Action buttons (Full width on mobile) */}
                       <div className="col-span-1 lg:col-span-1 flex lg:justify-end gap-2 mt-2 lg:mt-0">
                         <button onClick={() => openEditMenu(product)} className="flex-1 lg:flex-none flex justify-center items-center p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-blue-400"><Edit2 size={16} /></button>
                         <button disabled={isDeleting === product.id} onClick={() => handleDelete(product.id)} className="flex-1 lg:flex-none flex justify-center items-center p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-colors text-red-400 disabled:opacity-50">
@@ -460,7 +458,6 @@ export default function AdminCommandCenter() {
       <div className={`fixed inset-0 z-50 transition-all duration-300 ${isDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div onClick={() => setIsDrawerOpen(false)} className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isDrawerOpen ? 'opacity-100' : 'opacity-0'}`} />
         
-        {/* Full width on mobile, 600px on md screens */}
         <div className={`absolute top-0 right-0 h-full w-full md:w-[600px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
             <h2 className="text-lg md:text-xl font-black tracking-wider flex items-center gap-2 md:gap-3">
@@ -470,12 +467,11 @@ export default function AdminCommandCenter() {
             <button onClick={() => setIsDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
           </div>
           
-          {/* THE FORM WRAPS THE ENTIRE SCROLLABLE AREA + FOOTER */}
           <form id="material-form" onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 md:space-y-6">
               
               <div className="space-y-2">
-                <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 flex justify-between"><span>Showcase Asset</span></label>
+                <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 flex justify-between"><span>Showcase Asset (Optional)</span></label>
                 <div className="flex gap-3 md:gap-4 items-center">
                   <div onClick={() => document.getElementById('imageUpload')?.click()} className="relative w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center group cursor-pointer hover:border-emerald-500 transition-colors">
                     {formData.imageUrl ? <img src={formData.imageUrl} className="w-full h-full object-cover" /> : <UploadCloud size={20} className="opacity-30 group-hover:text-emerald-400 group-hover:opacity-100" />}
@@ -483,12 +479,11 @@ export default function AdminCommandCenter() {
                   </div>
                   <div className="flex-1 space-y-2">
                     <input type="file" id="imageUpload" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                    <input required type="url" placeholder="Paste direct image link..." value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" />
+                    <input type="url" placeholder="Paste image link or click upload..." value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" />
                   </div>
                 </div>
               </div>
 
-              {/* Stack to 1 column on mobile, 2 on md */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Material Title</label>
@@ -556,7 +551,7 @@ export default function AdminCommandCenter() {
                       {uniqueMenus.length > 0 && <button type="button" onClick={() => setIsNewMenu(!isNewMenu)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewMenu ? "Select Existing" : "+ Add New"}</button>}
                     </div>
                     {isNewMenu || uniqueMenus.length === 0 ? (
-                      <input required type="text" placeholder="e.g. Structural" value={formData.menu} onChange={e => setFormData({...formData, menu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      <input required type="text" placeholder="e.g. የግንባታ ብረት" value={formData.menu} onChange={e => setFormData({...formData, menu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
                     ) : (
                       <div className="relative">
                         <select required value={formData.menu} onChange={e => {setFormData({...formData, menu: e.target.value, submenu: "", type: "Standard"}); setIsNewSubmenu(false); setIsNewType(false);}} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none truncate">
@@ -574,7 +569,7 @@ export default function AdminCommandCenter() {
                       {uniqueSubmenus.length > 0 && <button type="button" onClick={() => setIsNewSubmenu(!isNewSubmenu)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewSubmenu ? "Select Existing" : "+ Add New"}</button>}
                     </div>
                     {isNewSubmenu || uniqueSubmenus.length === 0 ? (
-                      <input required type="text" placeholder="e.g. Steel & Metals" value={formData.submenu} onChange={e => setFormData({...formData, submenu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      <input required type="text" placeholder="e.g. የሀገር ውስጥ" value={formData.submenu} onChange={e => setFormData({...formData, submenu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
                     ) : (
                       <div className="relative">
                         <select required value={formData.submenu} onChange={e => {setFormData({...formData, submenu: e.target.value, type: "Standard"}); setIsNewType(false);}} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none truncate">
@@ -592,7 +587,7 @@ export default function AdminCommandCenter() {
                       <button type="button" onClick={() => setIsNewType(!isNewType)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewType ? "Select Existing" : "+ Add New"}</button>
                     </div>
                     {isNewType ? (
-                      <input required type="text" placeholder="e.g. Premium" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      <input required type="text" placeholder="e.g. የቱርክ ብረት" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
                     ) : (
                       <div className="relative">
                         <select required value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
@@ -613,8 +608,7 @@ export default function AdminCommandCenter() {
 
             </div>
 
-            {/* BUTTONS ARE NOW INSIDE THE FORM TO TRIGGER HTML5 VALIDATION */}
-            <div className="p-4 md:p-6 bg-black border-t border-white/10 flex gap-2 md:gap-3 sticky bottom-0">
+            <div className="p-4 md:p-6 bg-black border-t border-white/10 flex gap-2 md:gap-3 sticky bottom-0 z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
               <button type="button" onClick={() => setIsDrawerOpen(false)} className="px-4 md:px-6 py-3 md:py-4 rounded-xl border border-white/10 bg-white/5 font-bold hover:bg-white/10 transition-colors text-sm">Cancel</button>
               <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 py-3 md:py-4 rounded-xl text-black bg-emerald-500 hover:bg-emerald-400 font-black text-xs md:text-sm uppercase tracking-widest transition-transform active:scale-95 flex items-center justify-center gap-2 shadow-xl">
                 {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
