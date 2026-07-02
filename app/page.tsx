@@ -7,7 +7,7 @@ import { useTheme, useLanguage } from "@/lib/Providers";
 import { 
   ArrowRight, ShoppingCart, PackageSearch, X, Loader2, Trash2, 
   Image as ImageIcon, Search, CheckCircle2, ChevronDown, ChevronRight, 
-  MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu
+  MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu, Mail
 } from "lucide-react";
 
 // --- THE PREDEFINED ETHIOPIAN MATERIAL MATRIX ---
@@ -30,12 +30,25 @@ const PREDEFINED_MATRIX: Record<string, string[]> = {
   ]
 };
 
+const initialSettingsState = {
+  companyName: "AmanZone Trading PLC",
+  slogan: "Industrial Grade. Delivered.",
+  logoUrl: "",
+  phone: "",
+  email: "",
+  address: "Addis Ababa, Ethiopia",
+  taxRate: 15,
+  deliveryBaseFee: 250,
+  aiEnabled: false
+};
+
 export default function PremiumStorefront() {
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
   const t = (en: string, am: string) => (language === "EN" ? en : am);
 
   const [products, setProducts] = useState<any[]>([]);
+  const [systemSettings, setSystemSettings] = useState<any>(initialSettingsState);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -82,19 +95,27 @@ export default function PremiumStorefront() {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    // Inventory Sync
+    const qInv = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
+    const unsubInv = onSnapshot(qInv, (snapshot) => {
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
     }, () => setLoading(false));
-    return () => unsubscribe();
+
+    // Global Settings Sync
+    const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemSettings({ ...initialSettingsState, ...docSnap.data() });
+      }
+    });
+
+    return () => { unsubInv(); unsubSettings(); };
   }, []);
 
   // --- DYNAMICALLY MERGE PREDEFINED MATRIX WITH ACTIVE PRODUCTS ---
   const catalogTree = useMemo(() => {
     const tree: any = {};
     
-    // 1. Initialize with the hardcoded matrix so empty categories still show up
     Object.keys(PREDEFINED_MATRIX).forEach(menu => {
       tree[menu] = {};
       PREDEFINED_MATRIX[menu].forEach(submenu => {
@@ -102,7 +123,6 @@ export default function PremiumStorefront() {
       });
     });
 
-    // 2. Populate actual products (adds custom types and custom menus if created)
     products.forEach(p => {
       const m = p.menu || "Uncategorized";
       const sm = p.submenu || "General";
@@ -145,8 +165,9 @@ export default function PremiumStorefront() {
     setCartItems(prev => prev.map(item => item.id === id ? { ...item, quantity: newQuantity } : item));
   };
   
+  // DYNAMIC FINANCIAL CALCULATIONS FROM ADMIN SETTINGS
   const cartSubtotal = cartItems.reduce((total, item) => total + (parseFloat(item.price) * item.quantity), 0);
-  const vatAmount = formData.requireVat ? cartSubtotal * 0.15 : 0;
+  const vatAmount = formData.requireVat ? cartSubtotal * (systemSettings.taxRate / 100) : 0;
   const cartTotal = cartSubtotal + vatAmount;
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -162,11 +183,12 @@ export default function PremiumStorefront() {
         tinNumber: formData.tinNumber,
         requireVat: formData.requireVat,
         phone: formData.phone,
-        totalAmount: cartSubtotal,
+        totalAmount: cartSubtotal, // Backend will re-calculate VAT
         deliveryType,
         region: formData.region,
         subCity: formData.subCity,
-        specificAddress: formData.address
+        specificAddress: formData.address,
+        baseDeliveryFee: systemSettings.deliveryBaseFee
       };
       
       const res = await fetch("/api/checkout", {
@@ -198,6 +220,20 @@ export default function PremiumStorefront() {
     }
   };
 
+  // Helper for rendering dynamic split slogan
+  const renderSlogan = () => {
+    const parts = systemSettings.slogan.split('.');
+    if (parts.length < 2) return <>{systemSettings.slogan}</>;
+    return (
+      <>
+        {parts[0]}. <br />
+        <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(to right, var(--text-main), var(--accent))' }}>
+          {parts.slice(1).join('.').trim()}
+        </span>
+      </>
+    );
+  };
+
   return (
     <div className="relative min-h-screen font-sans scroll-smooth" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-main)' }}>
       
@@ -207,9 +243,15 @@ export default function PremiumStorefront() {
       {/* Header */}
       <header className={`fixed top-0 w-full z-40 transition-colors duration-300 border-b transform-gpu ${scrolled ? 'bg-black/80 py-3 border-white/10 shadow-2xl backdrop-blur-md' : 'bg-transparent py-3 md:py-5 border-transparent'}`}>
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 flex justify-between items-center">
+          
+          {/* DYNAMIC LOGO & COMPANY NAME */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center font-black text-white shadow-[0_0_20px_rgba(255,255,255,0.1)] text-xs md:text-base" style={{ backgroundColor: 'var(--accent)' }}>AZ</div>
-            <h1 className="text-xl md:text-2xl font-black tracking-tighter">AmanZone<span style={{ color: 'var(--accent)' }}>.</span></h1>
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center font-black text-white shadow-[0_0_20px_rgba(255,255,255,0.1)] text-xs md:text-base overflow-hidden" style={{ backgroundColor: 'var(--accent)' }}>
+              {systemSettings.logoUrl ? <img src={systemSettings.logoUrl} className="w-full h-full object-cover" alt="Logo" /> : "AZ"}
+            </div>
+            <h1 className="text-xl md:text-2xl font-black tracking-tighter truncate max-w-[150px] md:max-w-none">
+              {systemSettings.companyName.split(' ')[0]}<span style={{ color: 'var(--accent)' }}>.</span>
+            </h1>
           </div>
           
           <div className="flex items-center gap-2 md:gap-6">
@@ -239,12 +281,12 @@ export default function PremiumStorefront() {
           <span className="relative flex h-2 w-2 md:h-2.5 md:w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 md:h-2.5 md:w-2.5 bg-emerald-500"></span></span>
           <span className="text-[10px] md:text-xs font-semibold tracking-widest text-gray-300 uppercase">{t("Live Sync Active", "ቀጥታ ስርጭት ክፍት ነው")}</span>
         </div>
+        
+        {/* DYNAMIC SLOGAN */}
         <h2 className="text-4xl sm:text-5xl md:text-8xl font-black tracking-tighter mb-4 md:mb-6 leading-[1.1]">
-          {t("Industrial Grade.", "የግንባታ.")} <br />
-          <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(to right, var(--text-main), var(--accent))' }}>
-            {t("Delivered.", "እቃዎች በታማኝነት።")}
-          </span>
+          {renderSlogan()}
         </h2>
+
         <div className="relative w-full max-w-xl mt-4 md:mt-8">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={18} />
           <input 
@@ -378,7 +420,7 @@ export default function PremiumStorefront() {
                   <div className="mt-auto pt-4 border-t border-white/10 flex justify-between items-center">
                     <div className="flex flex-col">
                       <span className="font-black text-xl md:text-2xl text-emerald-400 leading-none">{(parseFloat(item.price) || 0).toLocaleString()}</span>
-                      <span className="text-[9px] md:text-[10px] opacity-50 uppercase tracking-widest mt-1">ETB / Unit</span>
+                      <span className="text-[9px] md:text-[10px] opacity-50 uppercase tracking-widest mt-1">ETB / {item.metric || "Unit"}</span>
                     </div>
                     <button onClick={() => addToCart(item)} className="p-2.5 md:p-3.5 rounded-[1rem] bg-white/5 hover:text-white transition-transform active:scale-95 border border-white/10 shadow-lg hover:bg-[var(--accent)]">
                       <ShoppingCart size={18} className="md:w-5 md:h-5" />
@@ -440,7 +482,7 @@ export default function PremiumStorefront() {
                       <div><p className="opacity-50 text-[10px] md:text-xs">Total Value</p><p className="font-bold text-emerald-400">{(trackingStatus.totalAmount || 0).toLocaleString()} ETB</p></div>
                       <div className="col-span-2">
                         <p className="opacity-50 text-[10px] md:text-xs">Logistics Route</p>
-                        <p className="font-bold">{trackingStatus.deliveryType === "Delivery" ? `${trackingStatus.logistics.region}, ${trackingStatus.logistics.subCity}` : "Warehouse Pickup (Bole, Addis Ababa)"}</p>
+                        <p className="font-bold">{trackingStatus.deliveryType === "Delivery" ? `${trackingStatus.logistics.region}, ${trackingStatus.logistics.subCity}` : "Warehouse Pickup"}</p>
                       </div>
                     </div>
                   </div>
@@ -524,7 +566,6 @@ export default function PremiumStorefront() {
               </div>
             </div>
           ) : (
-            // FORM WRAPS THE SCROLLING AREA AND THE FOOTER BUTTONS
             <form id="checkout-form" onSubmit={handleCheckout} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide">
                 <div className="space-y-6 md:space-y-8 animate-in slide-in-from-right-4 pb-4">
@@ -540,10 +581,11 @@ export default function PremiumStorefront() {
                       <input type="tel" required placeholder="Active Phone Number (e.g. 0911...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" />
                     </div>
                     
+                    {/* DYNAMIC VAT % FROM ADMIN SETTINGS */}
                     <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-black/30 space-y-3 md:space-y-4">
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={formData.requireVat} onChange={e => setFormData({...formData, requireVat: e.target.checked})} className="w-4 h-4 md:w-5 md:h-5 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500 bg-white/10" />
-                        <span className="text-xs md:text-sm font-bold">Require Corporate Invoice (+15% VAT)</span>
+                        <span className="text-xs md:text-sm font-bold">Require Corporate Invoice (+{systemSettings.taxRate}% VAT)</span>
                       </label>
                       
                       {formData.requireVat && (
@@ -592,7 +634,8 @@ export default function PremiumStorefront() {
                         </div>
                       )}
                       <textarea required placeholder="Specific site directions / Google Maps Link" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm resize-none"></textarea>
-                      <p className="text-[9px] md:text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center mt-2 flex items-center justify-center gap-1 md:gap-2"><Truck size={10} className="md:w-3 md:h-3"/> Delivery cost calculated post-inspection.</p>
+                      {/* DYNAMIC BASE DELIVERY FEE FROM ADMIN SETTINGS */}
+                      <p className="text-[9px] md:text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center mt-2 flex items-center justify-center gap-1 md:gap-2"><Truck size={10} className="md:w-3 md:h-3"/> Base delivery starts at {systemSettings.deliveryBaseFee} ETB. Final cost calculated post-inspection.</p>
                     </div>
                   )}
                 </div>
@@ -605,8 +648,9 @@ export default function PremiumStorefront() {
                       <span>Subtotal</span>
                       <span>{cartSubtotal.toLocaleString()} ETB</span>
                     </div>
+                    {/* DYNAMIC VAT % FROM ADMIN SETTINGS */}
                     <div className="flex justify-between items-center text-xs md:text-sm text-emerald-400 mb-3 md:mb-4">
-                      <span>VAT (15%)</span>
+                      <span>VAT ({systemSettings.taxRate}%)</span>
                       <span>+ {vatAmount.toLocaleString()} ETB</span>
                     </div>
                   </>
@@ -631,19 +675,30 @@ export default function PremiumStorefront() {
         </div>
       </div>
 
-      {/* Enterprise Footer */}
+      {/* DYNAMIC Enterprise Footer */}
       <footer className="relative z-10 border-t border-white/10 bg-black/80 pt-20 pb-10 mt-20 transform-gpu">
         <div className="max-w-[1400px] mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
           <div className="md:col-span-2">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white" style={{ backgroundColor: 'var(--accent)' }}>AZ</div>
-              <h2 className="text-xl font-black tracking-tighter">AmanZone Trading PLC</h2>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white overflow-hidden" style={{ backgroundColor: 'var(--accent)' }}>
+                {systemSettings.logoUrl ? <img src={systemSettings.logoUrl} className="w-full h-full object-cover" alt="Logo" /> : "AZ"}
+              </div>
+              <h2 className="text-xl font-black tracking-tighter">{systemSettings.companyName}</h2>
             </div>
-            <p className="opacity-50 text-sm max-w-sm leading-relaxed mb-6">Ethiopia's premier logistics and supply matrix for industrial-grade construction materials. Deployed with precision, secured by technology.</p>
+            <p className="opacity-50 text-sm max-w-sm leading-relaxed mb-6">{systemSettings.slogan}</p>
+          </div>
+          
+          <div className="md:col-span-2">
+             <h3 className="text-xs font-bold uppercase tracking-widest opacity-50 mb-6 border-b border-white/10 pb-4">Corporate Matrix</h3>
+             <div className="space-y-4">
+                <p className="flex items-center gap-3 text-sm opacity-80"><Phone size={16} className="text-emerald-400" /> {systemSettings.phone || "Not set"}</p>
+                <p className="flex items-center gap-3 text-sm opacity-80"><Mail size={16} className="text-emerald-400" /> {systemSettings.email || "Not set"}</p>
+                <p className="flex items-center gap-3 text-sm opacity-80"><MapPin size={16} className="text-emerald-400" /> {systemSettings.address || "Not set"}</p>
+             </div>
           </div>
         </div>
         <div className="max-w-[1400px] mx-auto px-6 pt-8 border-t border-white/5 text-center flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-xs opacity-30 font-bold uppercase tracking-widest">© 2026 AmanZone Trading PLC.</p>
+          <p className="text-xs opacity-30 font-bold uppercase tracking-widest">© {new Date().getFullYear()} {systemSettings.companyName}.</p>
         </div>
       </footer>
     </div>
