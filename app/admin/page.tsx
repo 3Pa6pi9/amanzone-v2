@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, setDoc } from "firebase/firestore";
 import { 
   Package, Plus, Edit2, Trash2, X, Search, Activity, 
   Box, Settings, Save, Loader2, CheckCircle2, Image as ImageIcon, AlertTriangle,
-  TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu
+  TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu, Hash, Mail
 } from "lucide-react";
 
 // --- THE PREDEFINED ETHIOPIAN MATERIAL MATRIX ---
@@ -33,6 +33,18 @@ const initialFormState = {
   title: "", price: "", description: "", 
   menu: "የግንባታ ብረት", submenu: "የሀገር ውስጥ", type: "Standard", 
   metric: "", size: "", color: "", imageUrl: "", stock: "", warehouse: ""
+};
+
+const initialSettingsState = {
+  companyName: "AmanZone Trading PLC",
+  slogan: "Industrial Grade. Delivered.",
+  logoUrl: "",
+  phone: "",
+  email: "",
+  address: "Addis Ababa, Ethiopia",
+  taxRate: 15,
+  deliveryBaseFee: 250,
+  aiEnabled: false
 };
 
 export default function AdminCommandCenter() {
@@ -65,15 +77,30 @@ export default function AdminCommandCenter() {
   const [isOrderDrawerOpen, setIsOrderDrawerOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [dispatchInfo, setDispatchInfo] = useState({ driverName: "", driverPhone: "", vehiclePlate: "" });
-  const [systemSettings, setSystemSettings] = useState<any>({ taxRate: 15, deliveryBaseFee: 250, aiEnabled: false });
+  
+  const [systemSettings, setSystemSettings] = useState<any>(initialSettingsState);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+
   const [toast, setToast] = useState({ show: false, msg: "", type: "success" });
 
   useEffect(() => {
+    // Inventory Sync
     const qInv = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
     const unsubInv = onSnapshot(qInv, (snapshot) => { setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setLoading(false); }, (error) => { console.error("Inventory error:", error); setLoading(false); });
+    
+    // Orders Sync
     const qOrders = query(collection(db, "orders"), orderBy("createdAt", "desc"));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => { setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
-    return () => { unsubInv(); unsubOrders(); };
+    
+    // Global Settings Sync
+    const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemSettings({ ...initialSettingsState, ...docSnap.data() });
+      }
+    });
+
+    return () => { unsubInv(); unsubOrders(); unsubSettings(); };
   }, []);
 
   const showToast = (msg: string, type = "success") => {
@@ -81,7 +108,6 @@ export default function AdminCommandCenter() {
     setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000);
   };
 
-  // --- DYNAMIC EXTRACTIONS (MERGING FIREBASE DATA WITH HARDCODED MATRIX) ---
   const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
   const uniqueSubmenus = useMemo(() => {
     const predefined = PREDEFINED_MATRIX[formData.menu] || [];
@@ -116,22 +142,28 @@ export default function AdminCommandCenter() {
     setIsDrawerOpen(true);
   };
 
+  // Generalized Cloudinary Upload Function
+  const uploadToCloudinary = async (file: File) => {
+    const uploadData = new FormData();
+    uploadData.append("file", file);
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    if (!uploadPreset || !cloudName) throw new Error("Cloudinary env missing.");
+    uploadData.append("upload_preset", uploadPreset);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: "POST", body: uploadData });
+    if (!res.ok) throw new Error("Cloudinary rejection");
+    const data = await res.json();
+    return data.secure_url;
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploadingImage(true);
     try {
-      const uploadData = new FormData();
-      uploadData.append("file", file);
-      const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-      if (!uploadPreset || !cloudName) throw new Error("Cloudinary env missing.");
-      uploadData.append("upload_preset", uploadPreset);
-
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: "POST", body: uploadData });
-      if (!res.ok) throw new Error("Cloudinary rejection");
-      const data = await res.json();
-      setFormData(prev => ({ ...prev, imageUrl: data.secure_url }));
+      const url = await uploadToCloudinary(file);
+      setFormData(prev => ({ ...prev, imageUrl: url }));
       showToast("Asset uploaded successfully.");
     } catch (error) {
       showToast("Cloudinary upload failed.", "error");
@@ -140,25 +172,42 @@ export default function AdminCommandCenter() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingLogo(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      setSystemSettings((prev: any) => ({ ...prev, logoUrl: url }));
+      showToast("Corporate Logo uploaded successfully.");
+    } catch (error) {
+      showToast("Logo upload failed.", "error");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleSaveInventory = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const payload = { 
-        title: formData.title || "Untitled",
-        price: formData.price?.toString() || "0",
-        description: formData.description || "",
-        menu: formData.menu || "Uncategorized",
-        submenu: formData.submenu || "General",
-        type: formData.type || "Standard",
-        metric: formData.metric || "Unit",
-        size: formData.size || "",
-        color: formData.color || "",
-        imageUrl: formData.imageUrl || "",
+      const payload: any = { 
+        title: formData.title?.trim() || "Untitled",
+        price: formData.price?.toString().trim() || "0",
+        description: formData.description?.trim() || "",
+        menu: formData.menu?.trim() || "Uncategorized",
+        submenu: formData.submenu?.trim() || "General",
+        type: formData.type?.trim() || "Standard",
+        metric: formData.metric?.trim() || "Unit",
+        size: formData.size?.trim() || "",
+        color: formData.color?.trim() || "",
+        imageUrl: formData.imageUrl?.trim() || "",
         stock: parseInt(formData.stock as string) || 0,
-        warehouse: formData.warehouse || "Main Hub",
+        warehouse: formData.warehouse?.trim() || "Main Hub",
         updatedAt: new Date().toISOString() 
       };
+      
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
 
       if (editingId) {
         await updateDoc(doc(db, "inventory", editingId), payload);
@@ -168,12 +217,24 @@ export default function AdminCommandCenter() {
         showToast("New material deployed successfully.");
       }
       setIsDrawerOpen(false);
-      
     } catch (error: any) {
       console.error("FIREBASE ERROR:", error);
       showToast(`Error: ${error.message || "Unknown database error"}`, "error");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      await setDoc(doc(db, "settings", "global"), systemSettings, { merge: true });
+      showToast("Global configurations synced successfully.");
+    } catch (error: any) {
+      console.error("SETTINGS ERROR:", error);
+      showToast(`Error: ${error.message || "Failed to sync settings"}`, "error");
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
@@ -249,7 +310,9 @@ export default function AdminCommandCenter() {
       <aside className={`fixed lg:left-0 h-full w-64 border-r border-white/10 bg-[#0A0A0F] z-30 transition-transform duration-300 ease-in-out lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0 pt-20' : '-translate-x-full'}`}>
         <div className="hidden lg:block p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-black bg-emerald-400">AZ</div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-black bg-emerald-400">
+              {systemSettings.logoUrl ? <img src={systemSettings.logoUrl} className="w-full h-full object-cover rounded-xl" /> : "AZ"}
+            </div>
             <div><h1 className="font-black tracking-tight text-lg leading-tight">Command<br/>Center</h1></div>
           </div>
         </div>
@@ -271,6 +334,9 @@ export default function AdminCommandCenter() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full max-w-[100vw]">
         
+        {/* ========================================= */}
+        {/* TAB: INVENTORY CONTROL                    */}
+        {/* ========================================= */}
         {activeTab === "inventory" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -361,7 +427,9 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* TAB: ORDERS */}
+        {/* ========================================= */}
+        {/* TAB: ORDERS & LOGISTICS                   */}
+        {/* ========================================= */}
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8">
@@ -426,29 +494,87 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* TAB: ADVANCED SETTINGS */}
+        {/* ========================================= */}
+        {/* TAB: ADVANCED SETTINGS                    */}
+        {/* ========================================= */}
         {activeTab === "settings" && (
-          <div className="animate-in fade-in duration-300">
-            <header className="mb-6 md:mb-8">
-              <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">System Configuration</h2>
-              <p className="text-xs md:text-sm opacity-50 font-medium">Core variables and AI communication network settings.</p>
+          <div className="animate-in fade-in duration-300 pb-20">
+            <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Global Configuration</h2>
+                <p className="text-xs md:text-sm opacity-50 font-medium">Control the storefront identity, financials, and AI layer.</p>
+              </div>
+              <button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full sm:w-auto px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50">
+                {isSavingSettings ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                Sync to Storefront
+              </button>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+              
+              {/* BRAND IDENTITY */}
               <div className="bg-[#0A0A0F] border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-2xl">
-                <h3 className="font-black text-base md:text-lg mb-4 md:mb-6 flex items-center gap-3 border-b border-white/10 pb-4"><FileText className="text-emerald-400" size={20}/> Core Variables</h3>
+                <h3 className="font-black text-base md:text-lg mb-4 md:mb-6 flex items-center gap-3 border-b border-white/10 pb-4"><Box className="text-emerald-400" size={20}/> Brand Identity</h3>
                 <div className="space-y-4 md:space-y-6">
+                  
+                  <div className="flex items-center gap-4 p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div onClick={() => document.getElementById('logoUpload')?.click()} className="w-16 h-16 rounded-xl bg-black border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center group cursor-pointer hover:border-emerald-500 transition-colors relative">
+                      {systemSettings.logoUrl ? <img src={systemSettings.logoUrl} className="w-full h-full object-cover" /> : <UploadCloud size={20} className="opacity-30 group-hover:text-emerald-400 group-hover:opacity-100" />}
+                      {isUploadingLogo && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-emerald-400" size={20} /></div>}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold">Corporate Logo</p>
+                      <p className="text-[10px] uppercase tracking-widest opacity-50 mt-1">PNG, JPG (Max 2MB)</p>
+                      <input type="file" id="logoUpload" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Corporate VAT Rate (%)</label>
-                    <input type="number" value={systemSettings.taxRate} onChange={e => setSystemSettings({...systemSettings, taxRate: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 font-mono text-sm" />
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Company Name</label>
+                    <input type="text" value={systemSettings.companyName} onChange={e => setSystemSettings({...systemSettings, companyName: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-sm font-bold" />
                   </div>
                   <div>
-                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Base Delivery Fee (ETB)</label>
-                    <input type="number" value={systemSettings.deliveryBaseFee} onChange={e => setSystemSettings({...systemSettings, deliveryBaseFee: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 font-mono text-sm" />
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Storefront Slogan</label>
+                    <input type="text" value={systemSettings.slogan} onChange={e => setSystemSettings({...systemSettings, slogan: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-sm" />
                   </div>
                 </div>
               </div>
 
+              {/* CONTACT MATRIX */}
+              <div className="bg-[#0A0A0F] border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-2xl">
+                <h3 className="font-black text-base md:text-lg mb-4 md:mb-6 flex items-center gap-3 border-b border-white/10 pb-4"><Phone className="text-emerald-400" size={20}/> Contact Matrix</h3>
+                <div className="space-y-4 md:space-y-6">
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                    <input type="text" placeholder="e.g. +251 911..." value={systemSettings.phone} onChange={e => setSystemSettings({...systemSettings, phone: e.target.value})} className="w-full pl-12 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-sm font-mono" />
+                  </div>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                    <input type="email" placeholder="e.g. sales@amanzone.com" value={systemSettings.email} onChange={e => setSystemSettings({...systemSettings, email: e.target.value})} className="w-full pl-12 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-sm" />
+                  </div>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+                    <input type="text" placeholder="e.g. Bole, Addis Ababa" value={systemSettings.address} onChange={e => setSystemSettings({...systemSettings, address: e.target.value})} className="w-full pl-12 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              {/* FINANCIAL VARIABLES */}
+              <div className="bg-[#0A0A0F] border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-2xl">
+                <h3 className="font-black text-base md:text-lg mb-4 md:mb-6 flex items-center gap-3 border-b border-white/10 pb-4"><FileText className="text-emerald-400" size={20}/> Financial Constants</h3>
+                <div className="space-y-4 md:space-y-6">
+                  <div>
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Corporate VAT Rate (%)</label>
+                    <input type="number" value={systemSettings.taxRate} onChange={e => setSystemSettings({...systemSettings, taxRate: parseFloat(e.target.value) || 0})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 font-mono text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Base Delivery Fee (ETB)</label>
+                    <input type="number" value={systemSettings.deliveryBaseFee} onChange={e => setSystemSettings({...systemSettings, deliveryBaseFee: parseFloat(e.target.value) || 0})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 font-mono text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              {/* AI LAYER */}
               <div className="bg-gradient-to-br from-indigo-900/20 to-[#0A0A0F] border border-indigo-500/20 rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full pointer-events-none" />
                 <h3 className="font-black text-base md:text-lg mb-4 md:mb-6 flex items-center gap-3 border-b border-indigo-500/20 pb-4"><Activity className="text-indigo-400" size={20}/> AI Layer</h3>
@@ -471,6 +597,7 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         )}
@@ -491,7 +618,7 @@ export default function AdminCommandCenter() {
             <button onClick={() => setIsDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
           </div>
           
-          <form id="material-form" onSubmit={handleSave} className="flex-1 flex flex-col overflow-hidden">
+          <form id="material-form" onSubmit={handleSaveInventory} className="flex-1 flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 md:space-y-6">
               
               <div className="space-y-2">
