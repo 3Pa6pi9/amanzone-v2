@@ -713,6 +713,7 @@ export default function AdminCommandCenter() {
                     <span>Base Value</span>
                     <span>{(Number(selectedOrder.subtotal) || 0).toLocaleString()} ETB</span>
                   </div>
+
                   {(Number(selectedOrder.finalAmount) > Number(selectedOrder.subtotal)) && (
                     <div className="flex justify-between text-emerald-400">
                       <span>Corporate VAT (15%)</span>
