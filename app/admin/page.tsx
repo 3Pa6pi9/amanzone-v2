@@ -6,7 +6,7 @@ import { collection, onSnapshot, addDoc, updateDoc, doc, query, orderBy, setDoc,
 import { 
   Package, Plus, Edit2, Trash2, X, Search, Activity, 
   Box, Settings, Save, Loader2, CheckCircle2, Image as ImageIcon, AlertTriangle,
-  TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu, Mail, Lock, Briefcase, Clock
+  TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu, Mail, Lock, Briefcase, Clock, Printer
 } from "lucide-react";
 
 // --- PREDEFINED MATRIX & INITIAL STATES ---
@@ -34,7 +34,6 @@ const initialSettingsState = {
   adminPassword: "AmanZone2026"
 };
 
-// Date formatter
 const formatDate = (isoString: string) => {
   if (!isoString) return "N/A";
   const date = new Date(isoString);
@@ -113,6 +112,9 @@ export default function AdminCommandCenter() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", type: "success" });
+  
+  // PROFORMA STATE
+  const [showProforma, setShowProforma] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -190,16 +192,28 @@ export default function AdminCommandCenter() {
     return data.secure_url;
   };
 
+  // FIXED: Vercel Build Error Patch (Awaiting outside state setter)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingImage(true);
-    try { setFormData(prev => ({ ...prev, imageUrl: await uploadToCloudinary(file) })); showToast("Asset uploaded."); } 
-    catch { showToast("Upload failed.", "error"); } finally { setIsUploadingImage(false); }
+    try { 
+      const url = await uploadToCloudinary(file);
+      setFormData(prev => ({ ...prev, imageUrl: url })); 
+      showToast("Asset uploaded."); 
+    } 
+    catch { showToast("Upload failed.", "error"); } 
+    finally { setIsUploadingImage(false); }
   };
 
+  // FIXED: Vercel Build Error Patch
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingLogo(true);
-    try { setSystemSettings((prev: any) => ({ ...prev, logoUrl: await uploadToCloudinary(file) })); showToast("Logo uploaded."); } 
-    catch { showToast("Logo upload failed.", "error"); } finally { setIsUploadingLogo(false); }
+    try { 
+      const url = await uploadToCloudinary(file);
+      setSystemSettings((prev: any) => ({ ...prev, logoUrl: url })); 
+      showToast("Logo uploaded."); 
+    } 
+    catch { showToast("Logo upload failed.", "error"); } 
+    finally { setIsUploadingLogo(false); }
   };
 
   const handleSaveInventory = async (e: React.FormEvent) => {
@@ -327,12 +341,11 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- UPGRADED ORDERS TAB --- */}
+        {/* --- ORDERS TAB --- */}
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8"><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Executive Overview</h2></header>
             
-            {/* Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10">
               <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-gradient-to-br from-emerald-900/40 to-black border border-emerald-500/20 shadow-xl relative overflow-hidden"><TrendingUp className="absolute right-6 top-6 opacity-20 text-emerald-400" size={48} /><h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 mb-1 md:mb-2">Total Revenue</h3><p className="text-3xl md:text-4xl font-black text-emerald-400">{totalRevenue.toLocaleString()} <span className="text-sm md:text-lg opacity-50">ETB</span></p></div>
               <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-[#111111] border border-white/10 shadow-xl"><h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 mb-1 md:mb-2">Active Routes</h3><p className="text-3xl md:text-4xl font-black">{activeOrdersCount}</p></div>
@@ -340,7 +353,6 @@ export default function AdminCommandCenter() {
             </div>
             
             <div className="bg-[#0A0A0F] border border-white/10 rounded-[1.5rem] overflow-hidden shadow-2xl">
-              {/* Wide Header Row */}
               <div className="hidden lg:grid grid-cols-6 gap-4 p-4 border-b border-white/10 text-[10px] font-bold uppercase tracking-widest opacity-50 bg-black/50">
                 <div className="col-span-1">Order Intel</div>
                 <div className="col-span-1">Client Matrix</div>
@@ -354,30 +366,27 @@ export default function AdminCommandCenter() {
                   orders.map((order) => (
                     <div key={order.id} className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:gap-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer" onClick={() => openOrderMenu(order)}>
                       
-                      {/* 1. Order ID & Time */}
                       <div className="col-span-1 flex flex-row lg:flex-col justify-between items-start">
                          <div>
                            <p className="text-[11px] text-emerald-400 font-mono mb-0.5">{order.id}</p>
                            <p className="text-[10px] opacity-60 flex items-center gap-1"><Clock size={10} /> {formatDate(order.createdAt)}</p>
                          </div>
-                         {/* Mobile Only Quick View */}
                          <div className="lg:hidden text-right">
                            <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status)}`}>{order.status.replace("_", " ")}</span>
                          </div>
                       </div>
 
-                      {/* 2. Exposed Client Info */}
+                      {/* FIXED: Added fallbacks for old test data */}
                       <div className="col-span-1">
-                        <p className="font-bold text-sm truncate flex items-center gap-1.5"><User size={12} className="opacity-50 text-emerald-400"/> {order.customerName}</p>
-                        <p className="text-xs opacity-70 mt-0.5 flex items-center gap-1.5"><Phone size={12} className="opacity-50"/> {order.phone}</p>
+                        <p className="font-bold text-sm truncate flex items-center gap-1.5"><User size={12} className="opacity-50 text-emerald-400"/> {order.customerName || "Unnamed Client"}</p>
+                        <p className="text-xs opacity-70 mt-0.5 flex items-center gap-1.5"><Phone size={12} className="opacity-50"/> {order.phone || "No Phone Info"}</p>
                         {order.companyName && <p className="text-[10px] text-gray-400 mt-1 truncate font-medium flex items-center gap-1.5"><Briefcase size={10} className="opacity-50 text-indigo-400"/> {order.companyName}</p>}
                       </div>
 
-                      {/* 3. Deployment Info */}
                       <div className="col-span-1 lg:col-span-2">
                         <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5 opacity-90">
                           {order.deliveryType === "Delivery" ? <Truck size={14} className="text-blue-400"/> : <Building2 size={14} className="text-indigo-400"/>} 
-                          {order.deliveryType}
+                          {order.deliveryType || "Unknown"}
                         </p>
                         {order.deliveryType === "Delivery" && order.logistics ? (
                           <p className="text-[11px] opacity-60 truncate pl-5">{order.logistics.region} • {order.logistics.subCity}</p>
@@ -386,13 +395,11 @@ export default function AdminCommandCenter() {
                         )}
                       </div>
 
-                      {/* 4. Financials */}
                       <div className="col-span-1 hidden lg:block">
                          <p className="font-black text-sm">{(Number(order.finalAmount) || 0).toLocaleString()} ETB</p>
                          <p className="text-[10px] opacity-50 mt-0.5">{order.requireVat ? 'VAT Included' : 'Standard Pipeline'}</p>
                       </div>
 
-                      {/* 5. Status */}
                       <div className="col-span-1 hidden lg:flex items-center justify-end gap-3">
                          <span className={`px-2.5 py-1 text-[9px] md:text-[10px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status)}`}>
                            {order.status.replace("_", " ")}
@@ -408,7 +415,7 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* ... [SETTINGS TAB REMAINS UNCHANGED] ... */}
+        {/* --- SETTINGS TAB --- */}
         {activeTab === "settings" && (
           <div className="animate-in fade-in duration-300 pb-20">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -456,18 +463,6 @@ export default function AdminCommandCenter() {
                     <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 block mb-2">Master Passcode</label>
                     <input type="text" value={systemSettings.adminPassword} onChange={e => setSystemSettings({...systemSettings, adminPassword: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 font-mono text-sm" />
                     <p className="text-[9px] md:text-[10px] opacity-50 mt-2">Required to bypass the Admin vault lock screen.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-indigo-900/20 to-[#0A0A0F] border border-indigo-500/20 rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-2xl relative overflow-hidden md:col-span-2">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[50px] rounded-full pointer-events-none" />
-                <h3 className="font-black text-base md:text-lg mb-4 md:mb-6 flex items-center gap-3 border-b border-indigo-500/20 pb-4"><Activity className="text-indigo-400" size={20}/> AI Layer</h3>
-                <div className="space-y-4 md:space-y-6 max-w-2xl">
-                  <p className="text-xs md:text-sm opacity-70 leading-relaxed">Establish the neural link between the Storefront Client AI and the Admin Assistant AI.</p>
-                  <div className="flex items-center justify-between p-4 bg-black/50 border border-white/5 rounded-xl">
-                    <div><p className="font-bold text-sm">AI Agent Network</p><p className="text-[9px] md:text-[10px] uppercase tracking-widest opacity-50 mt-1">Status: {systemSettings.aiEnabled ? 'Online' : 'Offline'}</p></div>
-                    <button onClick={() => setSystemSettings({...systemSettings, aiEnabled: !systemSettings.aiEnabled})} className={`w-12 h-6 rounded-full transition-colors relative ${systemSettings.aiEnabled ? 'bg-indigo-500' : 'bg-white/10'}`}><div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${systemSettings.aiEnabled ? 'left-7' : 'left-1'}`} /></button>
                   </div>
                 </div>
               </div>
@@ -650,7 +645,6 @@ export default function AdminCommandCenter() {
       <div className={`fixed inset-0 z-50 transition-all duration-300 ${isOrderDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div onClick={() => setIsOrderDrawerOpen(false)} className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isOrderDrawerOpen ? 'opacity-100' : 'opacity-0'}`} />
         
-        {/* WIDER DRAWER: Changed from md:w-[600px] to lg:w-[900px] for split-panel layout */}
         <div className={`absolute top-0 right-0 h-full w-full lg:w-[900px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isOrderDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
           
           <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-start bg-black/40">
@@ -661,7 +655,13 @@ export default function AdminCommandCenter() {
                 <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded opacity-50 flex items-center gap-1"><Clock size={10}/> {formatDate(selectedOrder?.createdAt)}</span>
               </div>
             </div>
-            <button onClick={() => setIsOrderDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
+            
+            <div className="flex items-center gap-4">
+              <button onClick={() => setShowProforma(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors">
+                <Printer size={14} /> Generate Proforma
+              </button>
+              <button onClick={() => setIsOrderDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
+            </div>
           </div>
 
           {selectedOrder && (
@@ -709,8 +709,9 @@ export default function AdminCommandCenter() {
                     <div className="grid grid-cols-1 gap-3 md:gap-4">
                       <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                         <User size={16} className="opacity-50 mb-2 text-emerald-400" />
-                        <p className="font-bold text-sm">{selectedOrder.customerName}</p>
-                        <p className="text-xs opacity-70 mt-1 flex items-center gap-2"><Phone size={12}/> {selectedOrder.phone}</p>
+                        {/* FIXED: Fallbacks added for old blank DB items */}
+                        <p className="font-bold text-sm">{selectedOrder.customerName || "Unnamed Client"}</p>
+                        <p className="text-xs opacity-70 mt-1 flex items-center gap-2"><Phone size={12}/> {selectedOrder.phone || "No Phone Provided"}</p>
                       </div>
                       {selectedOrder.companyName && (
                         <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
@@ -727,7 +728,7 @@ export default function AdminCommandCenter() {
                     <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                       <div className="flex items-center gap-2 mb-3">
                         {selectedOrder.deliveryType === "Delivery" ? <Truck className="text-blue-400" size={18} /> : <Building2 className="text-indigo-400" size={18} />}
-                        <span className="font-bold text-sm">{selectedOrder.deliveryType}</span>
+                        <span className="font-bold text-sm">{selectedOrder.deliveryType || "Unknown"}</span>
                       </div>
                       {selectedOrder.deliveryType === "Delivery" && selectedOrder.logistics && (
                         <div className="pl-4 md:pl-6 border-l border-white/10 text-xs md:text-sm">
@@ -782,6 +783,103 @@ export default function AdminCommandCenter() {
           )}
         </div>
       </div>
+
+      {/* ========================================= */}
+      {/* PROFORMA INVOICE PRINT MODAL */}
+      {/* ========================================= */}
+      {showProforma && selectedOrder && (
+        <div className="fixed inset-0 z-[200] bg-white text-black p-4 md:p-12 overflow-y-auto print:p-0">
+          <div className="max-w-4xl mx-auto bg-white min-h-[1056px] print:min-h-0 relative shadow-2xl print:shadow-none p-8 md:p-16 border print:border-none">
+            
+            {/* Action Bar (Hidden when printing) */}
+            <div className="print:hidden flex justify-end gap-4 mb-8 border-b pb-4">
+              <button onClick={() => setShowProforma(false)} className="px-4 py-2 border border-gray-300 rounded font-bold hover:bg-gray-50 transition-colors">Close</button>
+              <button onClick={() => window.print()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition-colors flex items-center gap-2"><Printer size={18} /> Print / Save as PDF</button>
+            </div>
+
+            {/* Printable Area Starts */}
+            <div className="print:block">
+              {/* Header */}
+              <div className="flex justify-between items-start mb-16">
+                <div>
+                  <h1 className="text-4xl font-black mb-2 text-gray-900 uppercase tracking-tight">{systemSettings.companyName}</h1>
+                  <p className="text-sm font-medium text-gray-600 max-w-[200px] mb-1">{systemSettings.address}</p>
+                  <p className="text-sm text-gray-600">{systemSettings.phone}</p>
+                  <p className="text-sm text-gray-600">{systemSettings.email}</p>
+                </div>
+                <div className="text-right">
+                  <h2 className="text-3xl font-black text-gray-300 uppercase tracking-widest mb-2">Proforma Invoice</h2>
+                  <p className="text-sm font-bold text-gray-800">REF: {selectedOrder.id.substring(0, 8).toUpperCase()}</p>
+                  <p className="text-sm text-gray-600 mt-1">Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                </div>
+              </div>
+
+              {/* Client Info */}
+              <div className="mb-12 p-6 border-2 border-gray-100 rounded-xl bg-gray-50/50">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3 border-b pb-2">Billed To</h3>
+                <p className="font-black text-lg text-gray-900">{selectedOrder.customerName || "Unnamed Client"}</p>
+                <p className="text-sm text-gray-600 mt-1">{selectedOrder.phone || "No Phone Info"}</p>
+                {selectedOrder.companyName && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <p className="text-sm font-bold text-gray-800">Company: {selectedOrder.companyName}</p>
+                    <p className="text-sm font-mono text-gray-600 mt-1">TIN: {selectedOrder.tinNumber}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Table */}
+              <table className="w-full text-left mb-12">
+                <thead>
+                  <tr className="border-b-2 border-gray-800 text-gray-800">
+                    <th className="py-3 px-2 font-bold uppercase tracking-widest text-xs">Description</th>
+                    <th className="py-3 px-2 font-bold uppercase tracking-widest text-xs text-right w-24">Qty</th>
+                    <th className="py-3 px-2 font-bold uppercase tracking-widest text-xs text-right w-32">Unit Price</th>
+                    <th className="py-3 px-2 font-bold uppercase tracking-widest text-xs text-right w-40">Total (ETB)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {selectedOrder.items?.map((item:any, i:number) => (
+                    <tr key={i} className="text-gray-800">
+                      <td className="py-4 px-2 font-medium">{item.title}</td>
+                      <td className="py-4 px-2 text-right">{item.quantity} {item.metric}</td>
+                      <td className="py-4 px-2 text-right">{(Number(item.price)||0).toLocaleString()}</td>
+                      <td className="py-4 px-2 text-right font-bold">{((Number(item.price)||0) * item.quantity).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Totals Calculation */}
+              <div className="flex justify-end mb-16">
+                <div className="w-72 space-y-3">
+                  <div className="flex justify-between text-gray-600">
+                    <span className="font-bold">Subtotal</span> 
+                    <span>{(Number(selectedOrder.subtotal)||0).toLocaleString()} ETB</span>
+                  </div>
+                  {Number(selectedOrder.finalAmount) > Number(selectedOrder.subtotal) && (
+                    <div className="flex justify-between text-gray-600">
+                      <span className="font-bold">VAT ({systemSettings.taxRate}%)</span> 
+                      <span>{((Number(selectedOrder.finalAmount)||0) - (Number(selectedOrder.subtotal)||0)).toLocaleString()} ETB</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t-2 border-gray-800 pt-3 text-xl font-black text-gray-900">
+                    <span className="uppercase">Total Due</span> 
+                    <span>{(Number(selectedOrder.finalAmount)||0).toLocaleString()} ETB</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Terms */}
+              <div className="pt-8 border-t border-gray-200 text-xs text-gray-500 leading-relaxed text-center">
+                <p className="font-bold mb-1 text-gray-700">Official Proforma Statement</p>
+                <p>This document is a proforma invoice. Final delivery times and specific material prices are subject to change based on logistics constraints and on-site inspection.</p>
+                <p className="mt-1">Valid for 15 days from the date of issuance.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ========================================= */}
 
     </div>
   );
