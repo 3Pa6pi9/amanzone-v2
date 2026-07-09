@@ -30,6 +30,97 @@ const initialSettingsState = {
   phone: "", email: "", address: "Addis Ababa, Ethiopia", taxRate: 15, deliveryBaseFee: 250, aiEnabled: true
 };
 
+// ==========================================
+// 1. ISOLATED PRODUCT CARD COMPONENT
+// ==========================================
+const ProductCard = ({ item, index, viewMode, onAddToCart }: { item: any, index: number, viewMode: 'grid'|'list', onAddToCart: (item: any, customData?: any) => void }) => {
+  const [customLength, setCustomLength] = useState<number | string>(1);
+
+  const baseUnitPrice = parseFloat(item.price) || 0;
+  const isCustom = item.isLengthCustomizable;
+  
+  // Dynamic Pricing Math
+  const unitPrice = isCustom ? baseUnitPrice * (Number(customLength) || 1) : baseUnitPrice;
+
+  const handleAdd = () => {
+    if (isCustom) {
+      onAddToCart(item, {
+        length: customLength,
+        unitPrice: unitPrice,
+        displayTitle: `${item.title} (${customLength}${item.metric || 'm'} Cut)`
+      });
+      setCustomLength(1); // Reset input after adding to cart
+    } else {
+      onAddToCart(item);
+    }
+  };
+
+  return (
+    <div className={`group rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 bg-[#111111] border border-white/10 transition-transform duration-300 hover:shadow-2xl relative overflow-hidden animate-in fade-in zoom-in transform-gpu ${viewMode === 'grid' ? 'flex flex-col hover:-translate-y-2' : 'flex flex-row gap-4 md:gap-6 items-center hover:-translate-y-1'}`} style={{ animationDelay: `${(index % 10) * 30}ms` }}>
+      {item.imageUrl ? (
+        <div className={`overflow-hidden bg-black/40 border border-white/5 relative flex-shrink-0 ${viewMode === 'grid' ? 'w-full h-48 md:h-56 mb-4 md:mb-6 rounded-[1rem] md:rounded-2xl' : 'w-24 h-24 md:w-32 md:h-32 rounded-xl md:rounded-2xl'}`}>
+          <img src={item.imageUrl} alt={item.title || "Product"} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 transform-gpu" />
+          {viewMode === 'grid' && (
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4"><p className="text-[10px] md:text-xs font-bold text-white line-clamp-3">{item.description}</p></div>
+          )}
+        </div>
+      ) : (
+        <div className={`overflow-hidden bg-black/40 border border-white/5 flex flex-col items-center justify-center text-white/30 flex-shrink-0 ${viewMode === 'grid' ? 'w-full h-48 md:h-56 mb-4 md:mb-6 rounded-[1rem] md:rounded-2xl' : 'w-24 h-24 md:w-32 md:h-32 rounded-xl md:rounded-2xl'}`}>
+          <ImageIcon size={24} className={viewMode === 'grid' ? "mb-2 md:w-8 md:h-8" : "md:w-6 md:h-6"} />
+        </div>
+      )}
+
+      <div className={`flex flex-col flex-1 ${viewMode === 'list' ? 'justify-center min-w-0 py-1' : ''}`}>
+        <div className={`flex flex-wrap gap-1.5 md:gap-2 mb-2 md:mb-3 ${viewMode === 'list' ? 'hidden sm:flex' : ''}`}>
+          <span className="text-[8px] md:text-[9px] font-bold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full bg-white/10 uppercase tracking-wider truncate max-w-[100px]">{item.menu || "Material"}</span>
+          {item.metric && <span className="text-[8px] md:text-[9px] font-bold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full bg-black/50 border border-white/10 uppercase tracking-wider text-gray-400">{item.metric}</span>}
+        </div>
+        
+        <h4 className={`font-bold group-hover:text-white transition-colors truncate ${viewMode === 'grid' ? 'text-lg md:text-xl mb-1' : 'text-base md:text-lg mb-0.5'}`}>{item.title}</h4>
+        <p className={`opacity-50 truncate ${viewMode === 'grid' ? 'text-[10px] md:text-xs' : 'text-[9px] md:text-[10px]'}`}>{item.submenu || ''} {item.type || ''}</p>
+        
+        {/* CONDITIONAL DIMENSIONS UI */}
+        {isCustom && (
+          <div className={`flex items-center gap-2 mt-3 mb-1 ${viewMode === 'grid' ? 'bg-black/30 p-2.5 rounded-xl border border-white/5' : 'mb-2'}`}>
+            <div className="flex-1">
+              <label className="text-[8px] md:text-[9px] uppercase tracking-widest text-emerald-400 font-bold block mb-1">Required Cut ({item.metric || 'm'})</label>
+              <input 
+                type="number" min="0.1" step="0.1" value={customLength} 
+                onChange={(e) => setCustomLength(e.target.value)}
+                className="w-full px-2 py-1.5 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-xs transition-colors"
+              />
+            </div>
+            {(item.thickness || item.width) && (
+              <div className="px-2 py-1 bg-[#111111] border border-white/10 rounded-lg text-center flex-shrink-0 flex flex-col justify-center h-full">
+                 {item.thickness && <span className="text-[10px] md:text-xs font-bold text-gray-300 block leading-tight">{item.thickness}</span>}
+                 {item.width && <span className="text-[8px] md:text-[9px] opacity-50 uppercase block leading-tight">{item.width}</span>}
+              </div>
+            )}
+          </div>
+        )}
+        
+        <div className={`mt-auto flex justify-between items-center ${viewMode === 'grid' ? 'pt-4 border-t border-white/10 mt-4' : 'mt-2'}`}>
+          <div className="flex flex-col truncate pr-2">
+            <span className={`font-black text-emerald-400 leading-none truncate ${viewMode === 'grid' ? 'text-xl md:text-2xl' : 'text-lg md:text-xl'}`}>
+              {unitPrice.toLocaleString()}
+            </span>
+            <span className="text-[8px] md:text-[10px] opacity-50 uppercase tracking-widest mt-1 truncate">
+              {isCustom ? `Total (Base: ${baseUnitPrice})` : `ETB / ${item.metric || "Unit"}`}
+            </span>
+          </div>
+          <button onClick={handleAdd} className={`rounded-[1rem] bg-white/5 hover:text-white transition-transform active:scale-95 border border-white/10 shadow-lg hover:bg-[var(--accent)] flex-shrink-0 ${viewMode === 'grid' ? 'p-2.5 md:p-3.5' : 'p-2 md:p-3'}`}>
+            <ShoppingCart size={18} className="md:w-5 md:h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// ==========================================
+// 2. MAIN STOREFRONT COMPONENT
+// ==========================================
 export default function PremiumStorefront() {
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -129,44 +220,54 @@ export default function PremiumStorefront() {
     });
   }, [products, searchQuery, activeFilters]);
 
-  // --- FIXED CART QUANTITY LOGIC ---
-  const addToCart = (product: any) => {
+
+  // --- UPDATED CART LOGIC FOR CUSTOM LENGTHS ---
+  const addToCart = (product: any, customData?: { length: number | string, unitPrice: number, displayTitle: string }) => {
     setCartItems(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      // Create a unique cart ID so 3m cuts and 5m cuts of the same item don't overwrite each other
+      const uniqueCartId = customData ? `${product.id}-${customData.length}` : product.id;
+      const existing = prev.find(item => item.cartId === uniqueCartId);
+      
       if (existing) {
-        // If existing is blank string, treat as 0 before adding
         const currentQty = typeof existing.quantity === 'number' ? existing.quantity : (parseInt(existing.quantity) || 0);
-        return prev.map(item => item.id === product.id ? { ...item, quantity: currentQty + 1 } : item);
+        return prev.map(item => item.cartId === uniqueCartId ? { ...item, quantity: currentQty + 1 } : item);
       }
-      return [...prev, { ...product, quantity: 1 }];
+      
+      return [...prev, { 
+        ...product, 
+        cartId: uniqueCartId,
+        title: customData ? customData.displayTitle : product.title,
+        price: customData ? customData.unitPrice : product.price,
+        isCustomized: !!customData,
+        requestedLength: customData ? customData.length : null,
+        quantity: 1 
+      }];
     });
-    setToast({ show: true, msg: `${product.title || "Material"} added to pipeline` });
+    
+    setToast({ show: true, msg: `${customData ? customData.displayTitle : product.title || "Material"} added to pipeline` });
     setTimeout(() => setToast({ show: false, msg: "" }), 3000);
   };
 
-  const removeFromCart = (id: string) => setCartItems(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (cartId: string) => setCartItems(prev => prev.filter(item => item.cartId !== cartId));
 
-  const updateCartQuantity = (id: string, newQuantity: string | number) => {
-    // Allows empty string so user can backspace
+  const updateCartQuantity = (cartId: string, newQuantity: string | number) => {
     if (newQuantity === "") {
-      setCartItems(prev => prev.map(item => item.id === id ? { ...item, quantity: "" } : item));
+      setCartItems(prev => prev.map(item => item.cartId === cartId ? { ...item, quantity: "" } : item));
       return;
     }
     const parsed = typeof newQuantity === 'string' ? parseInt(newQuantity) : newQuantity;
     if (!isNaN(parsed) && parsed >= 1) {
-      setCartItems(prev => prev.map(item => item.id === id ? { ...item, quantity: parsed } : item));
+      setCartItems(prev => prev.map(item => item.cartId === cartId ? { ...item, quantity: parsed } : item));
     }
   };
 
-  const handleQuantityBlur = (id: string, currentQuantity: any) => {
-    // Clamps to 1 if the user clicks away while the input is empty or invalid
+  const handleQuantityBlur = (cartId: string, currentQuantity: any) => {
     const parsed = parseInt(currentQuantity);
     if (isNaN(parsed) || parsed < 1) {
-      updateCartQuantity(id, 1);
+      updateCartQuantity(cartId, 1);
     }
   };
   
-  // Calculate totals treating empty strings as 1 internally to avoid NaN errors in cart
   const cartSubtotal = cartItems.reduce((total, item) => total + (parseFloat(item.price) * (parseInt(item.quantity) || 1)), 0);
   const vatAmount = formData.requireVat ? cartSubtotal * (systemSettings.taxRate / 100) : 0;
   const cartTotal = cartSubtotal + vatAmount;
@@ -177,7 +278,6 @@ export default function PremiumStorefront() {
     if (cartItems.length === 0) return;
     setIsCheckingOut(true);
     try {
-      // Ensure payload sends solid numbers, fixing any blank strings
       const sanitizedItems = cartItems.map(item => ({ ...item, quantity: parseInt(item.quantity) || 1 }));
       
       const payload = {
@@ -374,40 +474,15 @@ export default function PremiumStorefront() {
             </div>
           ) : (
             <div className={viewMode === 'grid' ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6" : "flex flex-col gap-3 md:gap-4"}>
+              {/* RENDER ISOLATED PRODUCT CARDS */}
               {filteredProducts.map((item, i) => (
-                <div key={item.id} className={`group rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 bg-[#111111] border border-white/10 transition-transform duration-300 hover:shadow-2xl relative overflow-hidden animate-in fade-in zoom-in transform-gpu ${viewMode === 'grid' ? 'flex flex-col hover:-translate-y-2' : 'flex flex-row gap-4 md:gap-6 items-center hover:-translate-y-1'}`} style={{ animationDelay: `${(i % 10) * 30}ms` }}>
-                  {item.imageUrl ? (
-                    <div className={`overflow-hidden bg-black/40 border border-white/5 relative flex-shrink-0 ${viewMode === 'grid' ? 'w-full h-48 md:h-56 mb-4 md:mb-6 rounded-[1rem] md:rounded-2xl' : 'w-24 h-24 md:w-32 md:h-32 rounded-xl md:rounded-2xl'}`}>
-                      <img src={item.imageUrl} alt={item.title || "Product"} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 transform-gpu" />
-                      {viewMode === 'grid' && (
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4"><p className="text-[10px] md:text-xs font-bold text-white line-clamp-3">{item.description}</p></div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className={`overflow-hidden bg-black/40 border border-white/5 flex flex-col items-center justify-center text-white/30 flex-shrink-0 ${viewMode === 'grid' ? 'w-full h-48 md:h-56 mb-4 md:mb-6 rounded-[1rem] md:rounded-2xl' : 'w-24 h-24 md:w-32 md:h-32 rounded-xl md:rounded-2xl'}`}>
-                      <ImageIcon size={24} className={viewMode === 'grid' ? "mb-2 md:w-8 md:h-8" : "md:w-6 md:h-6"} />
-                    </div>
-                  )}
-
-                  <div className={`flex flex-col flex-1 ${viewMode === 'list' ? 'justify-center min-w-0 py-1' : ''}`}>
-                    <div className={`flex flex-wrap gap-1.5 md:gap-2 mb-2 md:mb-3 ${viewMode === 'list' ? 'hidden sm:flex' : ''}`}>
-                      <span className="text-[8px] md:text-[9px] font-bold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full bg-white/10 uppercase tracking-wider truncate max-w-[100px]">{item.menu || "Material"}</span>
-                      {item.metric && <span className="text-[8px] md:text-[9px] font-bold px-2 py-0.5 md:px-2.5 md:py-1 rounded-full bg-black/50 border border-white/10 uppercase tracking-wider text-gray-400">{item.metric}</span>}
-                    </div>
-                    <h4 className={`font-bold group-hover:text-white transition-colors truncate ${viewMode === 'grid' ? 'text-lg md:text-xl mb-1' : 'text-base md:text-lg mb-0.5'}`}>{item.title}</h4>
-                    <p className={`opacity-50 truncate ${viewMode === 'grid' ? 'text-[10px] md:text-xs mb-4 md:mb-6' : 'text-[9px] md:text-[10px] mb-2 md:mb-3'}`}>{item.submenu || ''} {item.type || ''}</p>
-                    
-                    <div className={`mt-auto flex justify-between items-center ${viewMode === 'grid' ? 'pt-4 border-t border-white/10' : ''}`}>
-                      <div className="flex flex-col truncate pr-2">
-                        <span className={`font-black text-emerald-400 leading-none truncate ${viewMode === 'grid' ? 'text-xl md:text-2xl' : 'text-lg md:text-xl'}`}>{(parseFloat(item.price) || 0).toLocaleString()}</span>
-                        <span className="text-[8px] md:text-[10px] opacity-50 uppercase tracking-widest mt-1 truncate">ETB / {item.metric || "Unit"}</span>
-                      </div>
-                      <button onClick={() => addToCart(item)} className={`rounded-[1rem] bg-white/5 hover:text-white transition-transform active:scale-95 border border-white/10 shadow-lg hover:bg-[var(--accent)] flex-shrink-0 ${viewMode === 'grid' ? 'p-2.5 md:p-3.5' : 'p-2 md:p-3'}`}>
-                        <ShoppingCart size={18} className="md:w-5 md:h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <ProductCard 
+                  key={item.id} 
+                  item={item} 
+                  index={i} 
+                  viewMode={viewMode} 
+                  onAddToCart={addToCart} 
+                />
               ))}
             </div>
           )}
@@ -501,7 +576,7 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- CHECKOUT DRAWER WITH UPDATED CART QUANTITY --- */}
+      {/* --- CHECKOUT DRAWER WITH UPDATED CART ID HANDLING --- */}
       <div className={`fixed inset-0 z-50 transition-all duration-500 ${isCartOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div onClick={() => {setIsCartOpen(false); setCheckoutStep(1);}} className={`absolute inset-0 bg-black/80 transition-opacity duration-300 ${isCartOpen ? 'opacity-100' : 'opacity-0'}`} />
         <div className={`absolute top-0 right-0 h-full w-full md:w-[500px] bg-[#050505] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -522,7 +597,7 @@ export default function PremiumStorefront() {
                   ) : (
                     <div className="flex-1 space-y-3 md:space-y-4">
                       {cartItems.map(item => (
-                        <div key={item.id} className="flex gap-3 md:gap-4 items-center bg-[#111111] border border-white/10 p-2.5 md:p-3 rounded-2xl">
+                        <div key={item.cartId} className="flex gap-3 md:gap-4 items-center bg-[#111111] border border-white/10 p-2.5 md:p-3 rounded-2xl">
                           <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black/50 border border-white/5 overflow-hidden flex-shrink-0">
                             {item.imageUrl ? <img src={item.imageUrl} alt={item.title} loading="lazy" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-3 opacity-30" />}
                           </div>
@@ -530,11 +605,10 @@ export default function PremiumStorefront() {
                             <h4 className="font-bold text-xs md:text-sm mb-0.5 truncate">{item.title}</h4>
                             <p className="text-[10px] md:text-xs opacity-70 mb-1 md:mb-2">{(parseFloat(item.price) || 0).toLocaleString()} ETB</p>
                             
-                            {/* UPDATED QUANTITY CONTROLS */}
                             <div className="flex items-center gap-1 mt-1 bg-black rounded-lg p-0.5 border border-white/10 w-fit">
                               <button 
                                 type="button" 
-                                onClick={() => updateCartQuantity(item.id, (parseInt(item.quantity) || 1) - 1)}
+                                onClick={() => updateCartQuantity(item.cartId, (parseInt(item.quantity) || 1) - 1)}
                                 disabled={(parseInt(item.quantity) || 1) <= 1}
                                 className="px-2 py-1 text-gray-400 hover:text-white hover:bg-white/10 rounded disabled:opacity-30"
                               >-</button>
@@ -542,21 +616,21 @@ export default function PremiumStorefront() {
                                 type="number" 
                                 min="1" 
                                 value={item.quantity} 
-                                onChange={(e) => updateCartQuantity(item.id, e.target.value)} 
-                                onBlur={(e) => handleQuantityBlur(item.id, e.target.value)}
+                                onChange={(e) => updateCartQuantity(item.cartId, e.target.value)} 
+                                onBlur={(e) => handleQuantityBlur(item.cartId, e.target.value)}
                                 className="w-10 bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" 
                                 style={{ MozAppearance: 'textfield' }} // hides arrows in firefox
                               />
                               <button 
                                 type="button" 
-                                onClick={() => updateCartQuantity(item.id, (parseInt(item.quantity) || 0) + 1)}
+                                onClick={() => updateCartQuantity(item.cartId, (parseInt(item.quantity) || 0) + 1)}
                                 className="px-2 py-1 text-gray-400 hover:text-white hover:bg-white/10 rounded"
                               >+</button>
                             </div>
 
                           </div>
                           <div className="flex flex-col items-end justify-between h-full py-1">
-                            <button onClick={() => removeFromCart(item.id)} className="text-red-400/50 hover:text-red-400 transition-colors mb-2 p-1"><Trash2 size={14} /></button>
+                            <button onClick={() => removeFromCart(item.cartId)} className="text-red-400/50 hover:text-red-400 transition-colors mb-2 p-1"><Trash2 size={14} /></button>
                             <span className="font-black text-emerald-400 text-xs md:text-sm">{((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)).toLocaleString()}</span>
                           </div>
                         </div>
