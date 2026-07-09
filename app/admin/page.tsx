@@ -34,10 +34,17 @@ const initialSettingsState = {
   adminPassword: "AmanZone2026"
 };
 
-const formatDate = (isoString: string) => {
-  if (!isoString) return "N/A";
-  const date = new Date(isoString);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// BULLETPROOF DATE FORMATTER
+const formatDate = (val: any) => {
+  if (!val) return "N/A";
+  try {
+    if (val.toDate) return val.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const date = new Date(val);
+    if (isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch (e) {
+    return "N/A";
+  }
 };
 
 export default function AdminCommandCenter() {
@@ -113,7 +120,6 @@ export default function AdminCommandCenter() {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", type: "success" });
   
-  // PROFORMA STATE
   const [showProforma, setShowProforma] = useState(false);
 
   useEffect(() => {
@@ -192,7 +198,6 @@ export default function AdminCommandCenter() {
     return data.secure_url;
   };
 
-  // FIXED: Vercel Build Error Patch (Awaiting outside state setter)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingImage(true);
     try { 
@@ -204,7 +209,6 @@ export default function AdminCommandCenter() {
     finally { setIsUploadingImage(false); }
   };
 
-  // FIXED: Vercel Build Error Patch
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingLogo(true);
     try { 
@@ -244,7 +248,15 @@ export default function AdminCommandCenter() {
     catch { showToast("Failed to purge.", "error"); } finally { setIsDeleting(null); }
   };
 
-  const filteredProducts = useMemo(() => products.filter(p => (p.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || (p.menu || "").toLowerCase().includes(searchQuery.toLowerCase())), [products, searchQuery]);
+  // BULLETPROOF SEARCH FILTER
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const safeTitle = String(p.title || "").toLowerCase();
+      const safeMenu = String(p.menu || "").toLowerCase();
+      const query = searchQuery.toLowerCase();
+      return safeTitle.includes(query) || safeMenu.includes(query);
+    });
+  }, [products, searchQuery]);
 
   const openOrderMenu = (order: any) => { setSelectedOrder(order); setDispatchInfo(order.dispatchInfo || { driverName: "", driverPhone: "", vehiclePlate: "" }); setIsOrderDrawerOpen(true); };
 
@@ -341,7 +353,6 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- ORDERS TAB --- */}
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8"><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Executive Overview</h2></header>
@@ -372,11 +383,10 @@ export default function AdminCommandCenter() {
                            <p className="text-[10px] opacity-60 flex items-center gap-1"><Clock size={10} /> {formatDate(order.createdAt)}</p>
                          </div>
                          <div className="lg:hidden text-right">
-                           <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status)}`}>{order.status.replace("_", " ")}</span>
+                           <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status || "")}`}>{(order.status || "pending").replace("_", " ")}</span>
                          </div>
                       </div>
 
-                      {/* FIXED: Added fallbacks for old test data */}
                       <div className="col-span-1">
                         <p className="font-bold text-sm truncate flex items-center gap-1.5"><User size={12} className="opacity-50 text-emerald-400"/> {order.customerName || "Unnamed Client"}</p>
                         <p className="text-xs opacity-70 mt-0.5 flex items-center gap-1.5"><Phone size={12} className="opacity-50"/> {order.phone || "No Phone Info"}</p>
@@ -401,8 +411,8 @@ export default function AdminCommandCenter() {
                       </div>
 
                       <div className="col-span-1 hidden lg:flex items-center justify-end gap-3">
-                         <span className={`px-2.5 py-1 text-[9px] md:text-[10px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status)}`}>
-                           {order.status.replace("_", " ")}
+                         <span className={`px-2.5 py-1 text-[9px] md:text-[10px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status || "")}`}>
+                           {(order.status || "pending").replace("_", " ")}
                          </span>
                          <ChevronRight size={16} className="opacity-30" />
                       </div>
@@ -709,7 +719,6 @@ export default function AdminCommandCenter() {
                     <div className="grid grid-cols-1 gap-3 md:gap-4">
                       <div className="p-4 bg-white/5 rounded-xl border border-white/5">
                         <User size={16} className="opacity-50 mb-2 text-emerald-400" />
-                        {/* FIXED: Fallbacks added for old blank DB items */}
                         <p className="font-bold text-sm">{selectedOrder.customerName || "Unnamed Client"}</p>
                         <p className="text-xs opacity-70 mt-1 flex items-center gap-2"><Phone size={12}/> {selectedOrder.phone || "No Phone Provided"}</p>
                       </div>
@@ -750,10 +759,10 @@ export default function AdminCommandCenter() {
                         <div key={i} className="flex items-center justify-between p-3 bg-black border border-white/5 rounded-xl">
                           <div className="flex-1 pr-2">
                             <p className="font-bold text-xs md:text-sm line-clamp-1">{item.title}</p>
-                            <p className="text-[10px] md:text-xs opacity-50 mt-0.5">{item.quantity} {item.metric || 'Units'} @ {(Number(item.price)||0).toLocaleString()} ETB</p>
+                            <p className="text-[10px] md:text-xs opacity-50 mt-0.5">{(Number(item.quantity) || 1)} {item.metric || 'Units'} @ {(Number(item.price)||0).toLocaleString()} ETB</p>
                           </div>
                           <p className="font-black text-emerald-400 text-sm whitespace-nowrap">
-                            {((Number(item.price)||0) * item.quantity).toLocaleString()}
+                            {((Number(item.price)||0) * (Number(item.quantity) || 1)).toLocaleString()}
                           </p>
                         </div>
                       ))}
@@ -791,30 +800,26 @@ export default function AdminCommandCenter() {
         <div className="fixed inset-0 z-[200] bg-white text-black p-4 md:p-12 overflow-y-auto print:p-0">
           <div className="max-w-4xl mx-auto bg-white min-h-[1056px] print:min-h-0 relative shadow-2xl print:shadow-none p-8 md:p-16 border print:border-none">
             
-            {/* Action Bar (Hidden when printing) */}
             <div className="print:hidden flex justify-end gap-4 mb-8 border-b pb-4">
               <button onClick={() => setShowProforma(false)} className="px-4 py-2 border border-gray-300 rounded font-bold hover:bg-gray-50 transition-colors">Close</button>
               <button onClick={() => window.print()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition-colors flex items-center gap-2"><Printer size={18} /> Print / Save as PDF</button>
             </div>
 
-            {/* Printable Area Starts */}
             <div className="print:block">
-              {/* Header */}
               <div className="flex justify-between items-start mb-16">
                 <div>
-                  <h1 className="text-4xl font-black mb-2 text-gray-900 uppercase tracking-tight">{systemSettings.companyName}</h1>
-                  <p className="text-sm font-medium text-gray-600 max-w-[200px] mb-1">{systemSettings.address}</p>
+                  <h1 className="text-4xl font-black mb-2 text-gray-900 uppercase tracking-tight">{systemSettings.companyName || "AmanZone"}</h1>
+                  <p className="text-sm font-medium text-gray-600 max-w-[200px] mb-1">{systemSettings.address || "Addis Ababa"}</p>
                   <p className="text-sm text-gray-600">{systemSettings.phone}</p>
                   <p className="text-sm text-gray-600">{systemSettings.email}</p>
                 </div>
                 <div className="text-right">
                   <h2 className="text-3xl font-black text-gray-300 uppercase tracking-widest mb-2">Proforma Invoice</h2>
-                  <p className="text-sm font-bold text-gray-800">REF: {selectedOrder.id.substring(0, 8).toUpperCase()}</p>
+                  <p className="text-sm font-bold text-gray-800">REF: {(selectedOrder.id || "0000").substring(0, 8).toUpperCase()}</p>
                   <p className="text-sm text-gray-600 mt-1">Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
               </div>
 
-              {/* Client Info */}
               <div className="mb-12 p-6 border-2 border-gray-100 rounded-xl bg-gray-50/50">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3 border-b pb-2">Billed To</h3>
                 <p className="font-black text-lg text-gray-900">{selectedOrder.customerName || "Unnamed Client"}</p>
@@ -827,7 +832,6 @@ export default function AdminCommandCenter() {
                 )}
               </div>
 
-              {/* Table */}
               <table className="w-full text-left mb-12">
                 <thead>
                   <tr className="border-b-2 border-gray-800 text-gray-800">
@@ -840,16 +844,15 @@ export default function AdminCommandCenter() {
                 <tbody className="divide-y divide-gray-200">
                   {selectedOrder.items?.map((item:any, i:number) => (
                     <tr key={i} className="text-gray-800">
-                      <td className="py-4 px-2 font-medium">{item.title}</td>
-                      <td className="py-4 px-2 text-right">{item.quantity} {item.metric}</td>
+                      <td className="py-4 px-2 font-medium">{item.title || "Unnamed Material"}</td>
+                      <td className="py-4 px-2 text-right">{(Number(item.quantity) || 1)} {item.metric || 'Units'}</td>
                       <td className="py-4 px-2 text-right">{(Number(item.price)||0).toLocaleString()}</td>
-                      <td className="py-4 px-2 text-right font-bold">{((Number(item.price)||0) * item.quantity).toLocaleString()}</td>
+                      <td className="py-4 px-2 text-right font-bold">{((Number(item.price)||0) * (Number(item.quantity) || 1)).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
-              {/* Totals Calculation */}
               <div className="flex justify-end mb-16">
                 <div className="w-72 space-y-3">
                   <div className="flex justify-between text-gray-600">
@@ -858,7 +861,7 @@ export default function AdminCommandCenter() {
                   </div>
                   {Number(selectedOrder.finalAmount) > Number(selectedOrder.subtotal) && (
                     <div className="flex justify-between text-gray-600">
-                      <span className="font-bold">VAT ({systemSettings.taxRate}%)</span> 
+                      <span className="font-bold">VAT ({systemSettings.taxRate || 15}%)</span> 
                       <span>{((Number(selectedOrder.finalAmount)||0) - (Number(selectedOrder.subtotal)||0)).toLocaleString()} ETB</span>
                     </div>
                   )}
@@ -869,7 +872,6 @@ export default function AdminCommandCenter() {
                 </div>
               </div>
 
-              {/* Footer Terms */}
               <div className="pt-8 border-t border-gray-200 text-xs text-gray-500 leading-relaxed text-center">
                 <p className="font-bold mb-1 text-gray-700">Official Proforma Statement</p>
                 <p>This document is a proforma invoice. Final delivery times and specific material prices are subject to change based on logistics constraints and on-site inspection.</p>
@@ -879,7 +881,6 @@ export default function AdminCommandCenter() {
           </div>
         </div>
       )}
-      {/* ========================================= */}
 
     </div>
   );
