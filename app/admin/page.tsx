@@ -25,7 +25,8 @@ const PREDEFINED_MATRIX: Record<string, string[]> = {
 
 const initialFormState = {
   title: "", price: "", description: "", menu: "የግንባታ ብረት", submenu: "የሀገር ውስጥ", type: "Standard", 
-  metric: "", size: "", color: "", imageUrl: "", stock: "", warehouse: ""
+  metric: "", size: "", color: "", imageUrl: "", stock: "", warehouse: "",
+  isLengthCustomizable: false, thickness: "", width: ""
 };
 
 const initialSettingsState = {
@@ -60,7 +61,7 @@ export default function AdminCommandCenter() {
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(initialFormState);
@@ -79,12 +80,12 @@ export default function AdminCommandCenter() {
   const [isOrderDrawerOpen, setIsOrderDrawerOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [dispatchInfo, setDispatchInfo] = useState({ driverName: "", driverPhone: "", vehiclePlate: "" });
-  
+
   const [systemSettings, setSystemSettings] = useState<any>(initialSettingsState);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", type: "success" });
-  
+
   const [showProforma, setShowProforma] = useState(false);
 
   // ==========================================
@@ -113,7 +114,7 @@ export default function AdminCommandCenter() {
   }, [isAuthenticated]);
 
   // ==========================================
-  // 3. ALL USEMEMO DECLARATIONS (MOVED ABOVE EARLY RETURNS!)
+  // 3. ALL USEMEMO DECLARATIONS
   // ==========================================
   const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
   const uniqueSubmenus = useMemo(() => {
@@ -177,7 +178,7 @@ export default function AdminCommandCenter() {
 
   const handleLogout = () => { localStorage.removeItem("az_admin_session"); setIsAuthenticated(false); };
   const showToast = (msg: string, type = "success") => { setToast({ show: true, msg, type }); setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000); };
-  
+
   const openAddMenu = () => {
     setFormData(initialFormState); setEditingId(null);
     setIsNewMenu(false); setIsNewSubmenu(false); setIsNewType(true);
@@ -190,7 +191,10 @@ export default function AdminCommandCenter() {
       title: product.title || "", price: product.price || "", description: product.description || "",
       menu: product.menu || "", submenu: product.submenu || "", type: product.type || "Standard",
       metric: product.metric || "", size: product.size || "", color: product.color || "",
-      imageUrl: product.imageUrl || "", stock: product.stock?.toString() || "", warehouse: product.warehouse || ""
+      imageUrl: product.imageUrl || "", stock: product.stock?.toString() || "", warehouse: product.warehouse || "",
+      isLengthCustomizable: product.isLengthCustomizable || false,
+      thickness: product.thickness || "",
+      width: product.width || ""
     });
     setEditingId(product.id);
     setIsNewMenu(false); setIsNewSubmenu(false); setIsNewType(false); setIsNewMetric(false); setIsNewWarehouse(false);
@@ -231,7 +235,11 @@ export default function AdminCommandCenter() {
         title: formData.title || "Untitled", price: formData.price?.toString() || "0", description: formData.description || "",
         menu: formData.menu || "Uncategorized", submenu: formData.submenu || "General", type: formData.type || "Standard",
         metric: formData.metric || "Unit", size: formData.size || "", color: formData.color || "", imageUrl: formData.imageUrl || "",
-        stock: parseInt(formData.stock as string) || 0, warehouse: formData.warehouse || "Main Hub", updatedAt: new Date().toISOString() 
+        stock: parseInt(formData.stock as string) || 0, warehouse: formData.warehouse || "Main Hub",
+        isLengthCustomizable: formData.isLengthCustomizable || false,
+        thickness: formData.thickness || "",
+        width: formData.width || "",
+        updatedAt: new Date().toISOString() 
       };
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
       if (editingId) { await updateDoc(doc(db, "inventory", editingId), payload); showToast("Material updated."); } 
@@ -269,7 +277,7 @@ export default function AdminCommandCenter() {
   };
 
   // ==========================================
-  // 5. EARLY RETURNS (SAFE TO CALL NOW)
+  // 5. EARLY RETURNS
   // ==========================================
   if (!isMounted) return null; 
 
@@ -298,7 +306,7 @@ export default function AdminCommandCenter() {
   // ==========================================
   return (
     <div className="flex min-h-screen bg-[#050505] text-white font-sans selection:bg-emerald-500/30 overflow-x-hidden">
-      
+
       <div className={`fixed top-4 md:top-6 left-1/2 -translate-x-1/2 z-[100] px-4 md:px-6 py-2 md:py-3 rounded-full font-bold text-xs md:text-sm shadow-2xl flex items-center gap-2 transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : '-translate-y-10 opacity-0 pointer-events-none'} ${toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-white text-black'}`}>
         {toast.type === 'error' ? <AlertTriangle size={16} /> : <CheckCircle2 className="text-emerald-500" size={16} />}
         {toast.msg}
@@ -328,14 +336,14 @@ export default function AdminCommandCenter() {
           <button onClick={() => { setActiveTab("orders"); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all text-sm ${activeTab === "orders" ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}><Activity size={18} /> Logistics & Orders {activeOrdersCount > 0 && <span className="ml-auto flex items-center justify-center w-5 h-5 bg-emerald-500 text-black text-[10px] rounded-full">{activeOrdersCount}</span>}</button>
           <button onClick={() => { setActiveTab("settings"); setIsMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all text-sm ${activeTab === "settings" ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'}`}><Settings size={18} /> Advanced Settings</button>
         </nav>
-        
+
         <div className="p-4 border-t border-white/10">
           <button onClick={handleLogout} className="w-full py-3 text-xs font-bold uppercase tracking-widest text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">Lock Vault</button>
         </div>
       </aside>
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full max-w-[100vw]">
-        
+
         {activeTab === "inventory" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -375,13 +383,13 @@ export default function AdminCommandCenter() {
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8"><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Executive Overview</h2></header>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-8 md:mb-10">
               <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-gradient-to-br from-emerald-900/40 to-black border border-emerald-500/20 shadow-xl relative overflow-hidden"><TrendingUp className="absolute right-6 top-6 opacity-20 text-emerald-400" size={48} /><h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 mb-1 md:mb-2">Total Revenue</h3><p className="text-3xl md:text-4xl font-black text-emerald-400">{totalRevenue.toLocaleString()} <span className="text-sm md:text-lg opacity-50">ETB</span></p></div>
               <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-[#111111] border border-white/10 shadow-xl"><h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 mb-1 md:mb-2">Active Routes</h3><p className="text-3xl md:text-4xl font-black">{activeOrdersCount}</p></div>
               <div className="p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] bg-[#111111] border border-white/10 shadow-xl"><h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 mb-1 md:mb-2">VAT Liability</h3><p className="text-3xl md:text-4xl font-black text-gray-300">{vatCollected.toLocaleString()} <span className="text-sm md:text-lg opacity-50">ETB</span></p></div>
             </div>
-            
+
             <div className="bg-[#0A0A0F] border border-white/10 rounded-[1.5rem] overflow-hidden shadow-2xl">
               <div className="hidden lg:grid grid-cols-6 gap-4 p-4 border-b border-white/10 text-[10px] font-bold uppercase tracking-widest opacity-50 bg-black/50">
                 <div className="col-span-1">Order Intel</div>
@@ -390,12 +398,12 @@ export default function AdminCommandCenter() {
                 <div className="col-span-1">Financial Yield</div>
                 <div className="col-span-1 text-right">Status</div>
               </div>
-              
+
               <div className="divide-y divide-white/5">
                 {orders.length === 0 ? ( <div className="p-10 flex flex-col items-center justify-center opacity-30"><Activity size={48} className="mb-4" /></div> ) : (
                   orders.slice(0, 50).map((order) => (
                     <div key={order.id} className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:gap-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer" onClick={() => openOrderMenu(order)}>
-                      
+
                       <div className="col-span-1 flex flex-row lg:flex-col justify-between items-start">
                          <div>
                            <p className="text-[11px] text-emerald-400 font-mono mb-0.5">{order.id}</p>
@@ -435,7 +443,7 @@ export default function AdminCommandCenter() {
                          </span>
                          <ChevronRight size={16} className="opacity-30" />
                       </div>
-                      
+
                     </div>
                   ))
                 )}
@@ -503,7 +511,7 @@ export default function AdminCommandCenter() {
       {/* ========================================================= */}
       {/* DRAWERS: UNMOUNTED WHEN CLOSED */}
       {/* ========================================================= */}
-      
+
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
@@ -515,10 +523,10 @@ export default function AdminCommandCenter() {
               </h2>
               <button onClick={() => setIsDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
             </div>
-            
+
             <form id="material-form" onSubmit={handleSaveInventory} className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 md:space-y-6">
-                
+
                 <div className="space-y-2">
                   <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 flex justify-between"><span>Showcase Asset (Optional)</span></label>
                   <div className="flex gap-3 md:gap-4 items-center">
@@ -558,6 +566,28 @@ export default function AdminCommandCenter() {
                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
                       </div>
                     )}
+                  </div>
+                </div>
+
+                {/* NEW DIMENSIONS & CUSTOMIZATION BLOCK */}
+                <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-900/10 space-y-4">
+                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-indigo-400 border-b border-indigo-500/20 pb-2">Dimensions & Custom Length</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Fixed Thickness (e.g. 2.5mm)</label>
+                      <input type="text" placeholder="Leave empty if N/A" value={formData.thickness} onChange={e => setFormData({...formData, thickness: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-indigo-500 text-base md:text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Fixed Width (e.g. 20cm)</label>
+                      <input type="text" placeholder="Leave empty if N/A" value={formData.width} onChange={e => setFormData({...formData, width: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-indigo-500 text-base md:text-sm" />
+                    </div>
+                    <div className="md:col-span-2 flex items-center gap-3 p-3 bg-black/50 border border-white/10 rounded-lg mt-2 transition-colors hover:border-indigo-500/50">
+                      <input type="checkbox" id="customLengthToggle" checked={formData.isLengthCustomizable} onChange={e => setFormData({...formData, isLengthCustomizable: e.target.checked})} className="w-4 h-4 accent-indigo-500 cursor-pointer" />
+                      <div className="flex flex-col">
+                        <label htmlFor="customLengthToggle" className="text-sm font-bold cursor-pointer text-indigo-400">Allow Custom Length Input</label>
+                        <span className="text-[10px] opacity-60 mt-0.5">If checked, "Pricing" acts as the base price per {formData.metric || "unit"}.</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
