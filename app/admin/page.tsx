@@ -9,7 +9,7 @@ import {
   TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu, Mail, Lock, Briefcase, Clock, Printer
 } from "lucide-react";
 
-// --- PREDEFINED MATRIX & INITIAL STATES ---
+// --- PREDEFINED MATRIX ---
 const PREDEFINED_MATRIX: Record<string, string[]> = {
   "የግንባታ ብረት": ["የሀገር ውስጥ", "የቱርክ ብረት"],
   "ቆርቆሮ": ["መደበኛ ቆርቆሮ", "ኤጋ ቆርቆሮ", "ታይልስ ቆርቆሮ"],
@@ -34,7 +34,7 @@ const initialSettingsState = {
   adminPassword: "AmanZone2026"
 };
 
-// BULLETPROOF DATE FORMATTER (Prevents NaN crashes)
+// MEMORY-SAFE DATE FORMATTER
 const formatDate = (val: any) => {
   if (!val) return "N/A";
   try {
@@ -42,19 +42,19 @@ const formatDate = (val: any) => {
     const date = new Date(val);
     if (isNaN(date.getTime())) return "N/A";
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    return "N/A";
-  }
+  } catch (e) { return "N/A"; }
 };
 
 export default function AdminCommandCenter() {
-  // --- AUTHENTICATION STATE ---
+  const [isMounted, setIsMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authInput, setAuthInput] = useState("");
   const [authError, setAuthError] = useState("");
 
+  // ONLY mount on client to prevent SSR Hydration crashes
   useEffect(() => {
+    setIsMounted(true);
     try {
       const session = localStorage.getItem("az_admin_session");
       if (session === "active") setIsAuthenticated(true);
@@ -66,19 +66,22 @@ export default function AdminCommandCenter() {
     setIsAuthenticating(true);
     setAuthError("");
 
+    // EMERGENCY BACKDOOR: Clears cache if you get stuck in a crash loop
+    if (authInput === "RESET") {
+      localStorage.clear();
+      window.location.reload();
+      return;
+    }
+
     try {
       const settingsSnap = await getDoc(doc(db, "settings", "global"));
       let currentPassword = "AmanZone2026"; 
 
-      if (settingsSnap.exists()) {
-        const data = settingsSnap.data();
-        if (data && data.adminPassword) {
-          currentPassword = data.adminPassword;
-        }
+      if (settingsSnap.exists() && settingsSnap.data().adminPassword) {
+        currentPassword = settingsSnap.data().adminPassword;
       }
 
-      // 12345 added as an emergency backdoor in case the database string gets corrupted
-      if (authInput === currentPassword || authInput === "AmanZone2026" || authInput === "12345") {
+      if (authInput === currentPassword || authInput === "AmanZone2026") {
         localStorage.setItem("az_admin_session", "active");
         setIsAuthenticated(true);
       } else {
@@ -97,12 +100,13 @@ export default function AdminCommandCenter() {
     setIsAuthenticated(false);
   };
 
-  // --- STANDARD DASHBOARD STATES ---
+  // --- DASHBOARD STATES ---
   const [activeTab, setActiveTab] = useState("inventory");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(initialFormState);
@@ -121,6 +125,7 @@ export default function AdminCommandCenter() {
   const [isOrderDrawerOpen, setIsOrderDrawerOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [dispatchInfo, setDispatchInfo] = useState({ driverName: "", driverPhone: "", vehiclePlate: "" });
+  
   const [systemSettings, setSystemSettings] = useState<any>(initialSettingsState);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -144,6 +149,8 @@ export default function AdminCommandCenter() {
     return () => { unsubInv(); unsubOrders(); unsubSettings(); };
   }, [isAuthenticated]);
 
+  if (!isMounted) return null; // Wait for client render
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-4 selection:bg-emerald-500/30">
@@ -153,7 +160,7 @@ export default function AdminCommandCenter() {
           <h1 className="text-2xl font-black text-center mb-2 tracking-tight">Vault Access</h1>
           <p className="text-center text-sm opacity-50 mb-8">Enter your security clearance to access the Command Center.</p>
           <form onSubmit={handleLogin} className="space-y-4">
-            <div><input type="password" placeholder="Passcode..." value={authInput} onChange={(e) => { setAuthInput(e.target.value); setAuthError(""); }} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-center tracking-[0.3em] font-mono transition-colors" autoFocus /></div>
+            <div><input type="password" placeholder="Passcode (or RESET)" value={authInput} onChange={(e) => { setAuthInput(e.target.value); setAuthError(""); }} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-center tracking-[0.3em] font-mono transition-colors" autoFocus /></div>
             {authError && <p className="text-red-400 text-xs text-center font-bold">{authError}</p>}
             <button type="submit" disabled={isAuthenticating} className="w-full py-4 bg-emerald-500 text-black font-black uppercase tracking-widest text-sm rounded-xl hover:bg-emerald-400 transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50 flex justify-center items-center gap-2">
               {isAuthenticating ? <Loader2 className="animate-spin" size={18} /> : "Decrypt & Enter"}
@@ -166,7 +173,6 @@ export default function AdminCommandCenter() {
 
   const showToast = (msg: string, type = "success") => { setToast({ show: true, msg, type }); setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000); };
 
-  // SAFE UNIQUE CALCULATIONS
   const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
   const uniqueSubmenus = useMemo(() => {
     const predefined = PREDEFINED_MATRIX[formData.menu] || [];
@@ -211,9 +217,7 @@ export default function AdminCommandCenter() {
       const url = await uploadToCloudinary(file);
       setFormData(prev => ({ ...prev, imageUrl: url })); 
       showToast("Asset uploaded."); 
-    } 
-    catch { showToast("Upload failed.", "error"); } 
-    finally { setIsUploadingImage(false); }
+    } catch { showToast("Upload failed.", "error"); } finally { setIsUploadingImage(false); }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,9 +226,7 @@ export default function AdminCommandCenter() {
       const url = await uploadToCloudinary(file);
       setSystemSettings((prev: any) => ({ ...prev, logoUrl: url })); 
       showToast("Logo uploaded."); 
-    } 
-    catch { showToast("Logo upload failed.", "error"); } 
-    finally { setIsUploadingLogo(false); }
+    } catch { showToast("Logo upload failed.", "error"); } finally { setIsUploadingLogo(false); }
   };
 
   const handleSaveInventory = async (e: React.FormEvent) => {
@@ -255,7 +257,6 @@ export default function AdminCommandCenter() {
     catch { showToast("Failed to purge.", "error"); } finally { setIsDeleting(null); }
   };
 
-  // DOM OVERLOAD PROTECTION: Safe search filter
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const safeTitle = String(p.title || "").toLowerCase();
@@ -323,7 +324,7 @@ export default function AdminCommandCenter() {
         </div>
       </aside>
 
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full">
+      <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full max-w-[100vw]">
         
         {activeTab === "inventory" && (
           <div className="animate-in fade-in duration-300">
@@ -341,7 +342,7 @@ export default function AdminCommandCenter() {
                 <div className="col-span-1 text-center">Asset</div><div className="col-span-3">Material Identity</div><div className="col-span-2">Location & Stock</div><div className="col-span-3">Logistics Matrix</div><div className="col-span-2">Pricing (ETB)</div><div className="col-span-1 text-right">Actions</div>
               </div>
               <div className="divide-y divide-white/5">
-                {/* DOM OVERLOAD PROTECTION: SLICE TO 50 ITEMS MAX */}
+                {/* SAFE: Only renders up to 50 items to protect browser memory */}
                 {loading ? ( <div className="p-10 flex justify-center opacity-50"><Loader2 className="animate-spin" size={32} /></div> ) : filteredProducts.length === 0 ? ( <div className="p-10 flex flex-col items-center justify-center opacity-30"><Package size={48} className="mb-4" /><p className="text-sm font-bold">No materials found.</p></div> ) : (
                   filteredProducts.slice(0, 50).map((product) => (
                     <div key={product.id} className="grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 p-4 items-center hover:bg-white/5 transition-colors">
@@ -382,7 +383,7 @@ export default function AdminCommandCenter() {
               </div>
               
               <div className="divide-y divide-white/5">
-                {/* DOM OVERLOAD PROTECTION: SLICE TO 50 ITEMS MAX */}
+                {/* SAFE: Limits DOM nodes rendered */}
                 {orders.length === 0 ? ( <div className="p-10 flex flex-col items-center justify-center opacity-30"><Activity size={48} className="mb-4" /></div> ) : (
                   orders.slice(0, 50).map((order) => (
                     <div key={order.id} className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:gap-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer" onClick={() => openOrderMenu(order)}>
@@ -491,219 +492,200 @@ export default function AdminCommandCenter() {
         )}
       </main>
 
-      {/* ========================================= */}
-      {/* DRAWER: INVENTORY FORM */}
-      {/* ========================================= */}
-      <div className={`fixed inset-0 z-50 transition-all duration-300 ${isDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-        <div onClick={() => setIsDrawerOpen(false)} className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isDrawerOpen ? 'opacity-100' : 'opacity-0'}`} />
-        
-        <div className={`absolute top-0 right-0 h-full w-full md:w-[600px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
-            <h2 className="text-lg md:text-xl font-black tracking-wider flex items-center gap-2 md:gap-3">
-              {editingId ? <Edit2 className="text-emerald-400" size={20} /> : <Plus className="text-emerald-400" size={20} />} 
-              {editingId ? "Reconfigure Material" : "Deploy Material"}
-            </h2>
-            <button onClick={() => setIsDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
-          </div>
-          
-          <form id="material-form" onSubmit={handleSaveInventory} className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 md:space-y-6">
-              
-              <div className="space-y-2">
-                <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 flex justify-between"><span>Showcase Asset (Optional)</span></label>
-                <div className="flex gap-3 md:gap-4 items-center">
-                  <div onClick={() => document.getElementById('imageUpload')?.click()} className="relative w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center group cursor-pointer hover:border-emerald-500 transition-colors">
-                    {formData.imageUrl ? <img src={formData.imageUrl} className="w-full h-full object-cover" /> : <UploadCloud size={20} className="opacity-30 group-hover:text-emerald-400 group-hover:opacity-100" />}
-                    {isUploadingImage && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-emerald-400" size={20} /></div>}
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <input type="file" id="imageUpload" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                    <input type="url" placeholder="Paste image link or click upload..." value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2 space-y-2">
-                  <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Material Title</label>
-                  <input required type="text" placeholder="e.g. ቆርቆሮ (Roofing Iron)" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-bold" />
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Pricing (ETB)</label>
-                  <input required type="number" min="0" step="0.01" placeholder="0.00" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-mono" />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Metric Unit</label>
-                    {uniqueMetrics.length > 0 && <button type="button" onClick={() => setIsNewMetric(!isNewMetric)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewMetric ? "Select Existing" : "+ Add New"}</button>}
-                  </div>
-                  {isNewMetric || uniqueMetrics.length === 0 ? (
-                    <input required type="text" placeholder="e.g. Kg, Bags" value={formData.metric} onChange={e => setFormData({...formData, metric: e.target.value})} className="w-full px-3 py-3 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
-                  ) : (
-                    <div className="relative">
-                      <select required value={formData.metric} onChange={e => setFormData({...formData, metric: e.target.value})} className="w-full px-3 py-3 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
-                        <option value="" disabled>Select Metric</option>
-                        {uniqueMetrics.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-900/10 space-y-4">
-                <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-emerald-400 border-b border-emerald-500/20 pb-2">Location & Stock</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Current Quantity</label>
-                    <input required type="number" min="0" placeholder="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm font-mono text-emerald-400" />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Assigned Facility</label>
-                      {uniqueWarehouses.length > 0 && <button type="button" onClick={() => setIsNewWarehouse(!isNewWarehouse)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewWarehouse ? "Select Existing" : "+ Add New"}</button>}
-                    </div>
-                    {isNewWarehouse || uniqueWarehouses.length === 0 ? (
-                      <input required type="text" placeholder="e.g. Kality Main Hub" value={formData.warehouse} onChange={e => setFormData({...formData, warehouse: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
-                    ) : (
-                      <div className="relative">
-                        <select required value={formData.warehouse} onChange={e => setFormData({...formData, warehouse: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
-                          <option value="" disabled>Select Store Location</option>
-                          {uniqueWarehouses.map(w => <option key={w as string} value={w as string}>{w as string}</option>)}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl border border-white/10 bg-black/30 space-y-4">
-                <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Storefront Matrix</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Primary Menu</label>
-                      {uniqueMenus.length > 0 && <button type="button" onClick={() => setIsNewMenu(!isNewMenu)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewMenu ? "Select Existing" : "+ Add New"}</button>}
-                    </div>
-                    {isNewMenu || uniqueMenus.length === 0 ? (
-                      <input required type="text" placeholder="e.g. የግንባታ ብረት" value={formData.menu} onChange={e => setFormData({...formData, menu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
-                    ) : (
-                      <div className="relative">
-                        <select required value={formData.menu} onChange={e => {setFormData({...formData, menu: e.target.value, submenu: "", type: "Standard"}); setIsNewSubmenu(false); setIsNewType(false);}} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none truncate">
-                          <option value="" disabled>Select Menu</option>
-                          {uniqueMenus.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Submenu</label>
-                      {uniqueSubmenus.length > 0 && <button type="button" onClick={() => setIsNewSubmenu(!isNewSubmenu)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewSubmenu ? "Select Existing" : "+ Add New"}</button>}
-                    </div>
-                    {isNewSubmenu || uniqueSubmenus.length === 0 ? (
-                      <input required type="text" placeholder="e.g. የሀገር ውስጥ" value={formData.submenu} onChange={e => setFormData({...formData, submenu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
-                    ) : (
-                      <div className="relative">
-                        <select required value={formData.submenu} onChange={e => {setFormData({...formData, submenu: e.target.value, type: "Standard"}); setIsNewType(false);}} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none truncate">
-                          <option value="" disabled>Select Submenu</option>
-                          {uniqueSubmenus.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="md:col-span-2 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Material Type</label>
-                      <button type="button" onClick={() => setIsNewType(!isNewType)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewType ? "Select Existing" : "+ Add New"}</button>
-                    </div>
-                    {isNewType ? (
-                      <input required type="text" placeholder="e.g. የቱርክ ብረት" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
-                    ) : (
-                      <div className="relative">
-                        <select required value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
-                          <option value="Standard">Standard</option>
-                          {uniqueTypes.filter(t => t !== "Standard").map(t => <option key={t as string} value={t as string}>{t as string}</option>)}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Technical Description</label>
-                <textarea required rows={4} placeholder="Detailed specifications..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-4 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm resize-none"></textarea>
-              </div>
-
-            </div>
-
-            <div className="p-4 md:p-6 bg-black border-t border-white/10 flex gap-2 md:gap-3 sticky bottom-0 z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
-              <button type="button" onClick={() => setIsDrawerOpen(false)} className="px-4 md:px-6 py-3 md:py-4 rounded-xl border border-white/10 bg-white/5 font-bold hover:bg-white/10 transition-colors text-sm">Cancel</button>
-              <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 py-3 md:py-4 rounded-xl text-black bg-emerald-500 hover:bg-emerald-400 font-black text-xs md:text-sm uppercase tracking-widest transition-transform active:scale-95 flex items-center justify-center gap-2 shadow-xl">
-                {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                {isSaving ? "Syncing..." : (editingId ? "Update Parameters" : "Deploy to Live")}
-              </button>
-            </div>
-          </form>
-
-        </div>
-      </div>
-
-      {/* ========================================= */}
-      {/* DRAWER: UPGRADED ORDER DETAILS */}
-      {/* ========================================= */}
-      <div className={`fixed inset-0 z-50 transition-all duration-300 ${isOrderDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-        <div onClick={() => setIsOrderDrawerOpen(false)} className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isOrderDrawerOpen ? 'opacity-100' : 'opacity-0'}`} />
-        
-        <div className={`absolute top-0 right-0 h-full w-full lg:w-[900px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isOrderDrawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-          
-          <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-start bg-black/40">
-            <div>
-              <h2 className="text-lg md:text-xl font-black tracking-wider flex items-center gap-2 mb-1">Logistics Directive</h2>
-              <div className="flex items-center gap-3">
-                <p className="text-xs md:text-sm font-mono text-emerald-400 opacity-80">{selectedOrder?.id}</p>
-                <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded opacity-50 flex items-center gap-1"><Clock size={10}/> {formatDate(selectedOrder?.createdAt)}</span>
-              </div>
+      {/* ========================================================= */}
+      {/* MEMORY-SAFE DRAWERS: Now completely unmount when closed */}
+      {/* ========================================================= */}
+      
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
+          <div className="relative h-full w-full md:w-[600px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right-full">
+            <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
+              <h2 className="text-lg md:text-xl font-black tracking-wider flex items-center gap-2 md:gap-3">
+                {editingId ? <Edit2 className="text-emerald-400" size={20} /> : <Plus className="text-emerald-400" size={20} />} 
+                {editingId ? "Reconfigure Material" : "Deploy Material"}
+              </h2>
+              <button onClick={() => setIsDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
             </div>
             
-            <div className="flex items-center gap-4">
-              <button onClick={() => setShowProforma(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors">
-                <Printer size={14} /> Generate Proforma
-              </button>
-              <button onClick={() => setIsOrderDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
-            </div>
-          </div>
+            <form id="material-form" onSubmit={handleSaveInventory} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5 md:space-y-6">
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70 flex justify-between"><span>Showcase Asset (Optional)</span></label>
+                  <div className="flex gap-3 md:gap-4 items-center">
+                    <div onClick={() => document.getElementById('imageUpload')?.click()} className="relative w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black border border-white/10 overflow-hidden flex-shrink-0 flex items-center justify-center group cursor-pointer hover:border-emerald-500 transition-colors">
+                      {formData.imageUrl ? <img src={formData.imageUrl} className="w-full h-full object-cover" /> : <UploadCloud size={20} className="opacity-30 group-hover:text-emerald-400 group-hover:opacity-100" />}
+                      {isUploadingImage && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-emerald-400" size={20} /></div>}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <input type="file" id="imageUpload" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                      <input type="url" placeholder="Paste image link or click upload..." value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" />
+                    </div>
+                  </div>
+                </div>
 
-          {selectedOrder && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Material Title</label>
+                    <input required type="text" placeholder="e.g. ቆርቆሮ (Roofing Iron)" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Pricing (ETB)</label>
+                    <input required type="number" min="0" step="0.01" placeholder="0.00" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-mono" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Metric Unit</label>
+                      {uniqueMetrics.length > 0 && <button type="button" onClick={() => setIsNewMetric(!isNewMetric)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewMetric ? "Select Existing" : "+ Add New"}</button>}
+                    </div>
+                    {isNewMetric || uniqueMetrics.length === 0 ? (
+                      <input required type="text" placeholder="e.g. Kg, Bags" value={formData.metric} onChange={e => setFormData({...formData, metric: e.target.value})} className="w-full px-3 py-3 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                    ) : (
+                      <div className="relative">
+                        <select required value={formData.metric} onChange={e => setFormData({...formData, metric: e.target.value})} className="w-full px-3 py-3 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
+                          <option value="" disabled>Select Metric</option>
+                          {uniqueMetrics.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-900/10 space-y-4">
+                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-emerald-400 border-b border-emerald-500/20 pb-2">Location & Stock</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Current Quantity</label>
+                      <input required type="number" min="0" placeholder="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm font-mono text-emerald-400" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Assigned Facility</label>
+                        {uniqueWarehouses.length > 0 && <button type="button" onClick={() => setIsNewWarehouse(!isNewWarehouse)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewWarehouse ? "Select Existing" : "+ Add New"}</button>}
+                      </div>
+                      {isNewWarehouse || uniqueWarehouses.length === 0 ? (
+                        <input required type="text" placeholder="e.g. Kality Main Hub" value={formData.warehouse} onChange={e => setFormData({...formData, warehouse: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      ) : (
+                        <div className="relative">
+                          <select required value={formData.warehouse} onChange={e => setFormData({...formData, warehouse: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
+                            <option value="" disabled>Select Store Location</option>
+                            {uniqueWarehouses.map(w => <option key={w as string} value={w as string}>{w as string}</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-white/10 bg-black/30 space-y-4">
+                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Storefront Matrix</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Primary Menu</label>
+                        {uniqueMenus.length > 0 && <button type="button" onClick={() => setIsNewMenu(!isNewMenu)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewMenu ? "Select Existing" : "+ Add New"}</button>}
+                      </div>
+                      {isNewMenu || uniqueMenus.length === 0 ? (
+                        <input required type="text" placeholder="e.g. የግንባታ ብረት" value={formData.menu} onChange={e => setFormData({...formData, menu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      ) : (
+                        <div className="relative">
+                          <select required value={formData.menu} onChange={e => {setFormData({...formData, menu: e.target.value, submenu: "", type: "Standard"}); setIsNewSubmenu(false); setIsNewType(false);}} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none truncate">
+                            <option value="" disabled>Select Menu</option>
+                            {uniqueMenus.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Submenu</label>
+                        {uniqueSubmenus.length > 0 && <button type="button" onClick={() => setIsNewSubmenu(!isNewSubmenu)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewSubmenu ? "Select Existing" : "+ Add New"}</button>}
+                      </div>
+                      {isNewSubmenu || uniqueSubmenus.length === 0 ? (
+                        <input required type="text" placeholder="e.g. የሀገር ውስጥ" value={formData.submenu} onChange={e => setFormData({...formData, submenu: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      ) : (
+                        <div className="relative">
+                          <select required value={formData.submenu} onChange={e => {setFormData({...formData, submenu: e.target.value, type: "Standard"}); setIsNewType(false);}} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none truncate">
+                            <option value="" disabled>Select Submenu</option>
+                            {uniqueSubmenus.map(m => <option key={m as string} value={m as string}>{m as string}</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Material Type</label>
+                        <button type="button" onClick={() => setIsNewType(!isNewType)} className="text-[9px] text-emerald-400 font-bold uppercase">{isNewType ? "Select Existing" : "+ Add New"}</button>
+                      </div>
+                      {isNewType ? (
+                        <input required type="text" placeholder="e.g. የቱርክ ብረት" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm" />
+                      ) : (
+                        <div className="relative">
+                          <select required value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-[#111111] border border-white/10 rounded-lg outline-none focus:border-emerald-500 text-base md:text-sm appearance-none">
+                            <option value="Standard">Standard</option>
+                            {uniqueTypes.filter(t => t !== "Standard").map(t => <option key={t as string} value={t as string}>{t as string}</option>)}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 pointer-events-none" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-70">Technical Description</label>
+                  <textarea required rows={4} placeholder="Detailed specifications..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-4 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm resize-none"></textarea>
+                </div>
+              </div>
+
+              <div className="p-4 md:p-6 bg-black border-t border-white/10 flex gap-2 md:gap-3 sticky bottom-0 z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.8)]">
+                <button type="button" onClick={() => setIsDrawerOpen(false)} className="px-4 md:px-6 py-3 md:py-4 rounded-xl border border-white/10 bg-white/5 font-bold hover:bg-white/10 transition-colors text-sm">Cancel</button>
+                <button type="submit" disabled={isSaving || isUploadingImage} className="flex-1 py-3 md:py-4 rounded-xl text-black bg-emerald-500 hover:bg-emerald-400 font-black text-xs md:text-sm uppercase tracking-widest transition-transform active:scale-95 flex items-center justify-center gap-2 shadow-xl">
+                  {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                  {isSaving ? "Syncing..." : (editingId ? "Update Parameters" : "Deploy to Live")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MEMORY-SAFE ORDER DRAWER */}
+      {/* ========================================================= */}
+      {isOrderDrawerOpen && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div onClick={() => setIsOrderDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
+          <div className="relative h-full w-full lg:w-[900px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right-full">
+            <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-start bg-black/40">
+              <div>
+                <h2 className="text-lg md:text-xl font-black tracking-wider flex items-center gap-2 mb-1">Logistics Directive</h2>
+                <div className="flex items-center gap-3">
+                  <p className="text-xs md:text-sm font-mono text-emerald-400 opacity-80">{selectedOrder?.id}</p>
+                  <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded opacity-50 flex items-center gap-1"><Clock size={10}/> {formatDate(selectedOrder?.createdAt)}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <button onClick={() => setShowProforma(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors">
+                  <Printer size={14} /> Generate Proforma
+                </button>
+                <button onClick={() => setIsOrderDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-4 md:p-6 scrollbar-hide">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                
-                {/* LEFT COLUMN: Client & Logistics */}
                 <div className="space-y-6 md:space-y-8">
                   <div>
                     <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2 mb-3 md:mb-4">Pipeline Status Control</h3>
                     <div className="grid grid-cols-2 gap-2 md:gap-3">
                       {['pending_payment', 'processing', 'dispatched', 'delivered'].map((statusOption) => (
-                        <button 
-                          key={statusOption}
-                          disabled={isUpdatingStatus || selectedOrder.status === statusOption}
-                          onClick={() => updateOrderStatus(selectedOrder.id, statusOption)}
-                          className={`px-2 py-3 rounded-xl border text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-all
-                            ${selectedOrder.status === statusOption 
-                              ? getStatusColor(statusOption) + ' ring-1 ring-current' 
-                              : 'border-white/10 hover:border-white/30 text-gray-400'
-                            } disabled:opacity-50`}
-                        >
+                        <button key={statusOption} disabled={isUpdatingStatus || selectedOrder.status === statusOption} onClick={() => updateOrderStatus(selectedOrder.id, statusOption)} className={`px-2 py-3 rounded-xl border text-[9px] md:text-[10px] font-bold uppercase tracking-wider transition-all ${selectedOrder.status === statusOption ? getStatusColor(statusOption) + ' ring-1 ring-current' : 'border-white/10 hover:border-white/30 text-gray-400'} disabled:opacity-50`}>
                           {statusOption.replace("_", " ")}
                         </button>
                       ))}
@@ -718,9 +700,7 @@ export default function AdminCommandCenter() {
                         <input type="text" placeholder="Driver Phone" value={dispatchInfo.driverPhone} onChange={e => setDispatchInfo({...dispatchInfo, driverPhone: e.target.value})} className="w-full px-3 py-2 bg-black/50 border border-white/10 rounded-lg outline-none focus:border-indigo-500 text-sm md:text-sm text-base" />
                         <input type="text" placeholder="Vehicle Plate No." value={dispatchInfo.vehiclePlate} onChange={e => setDispatchInfo({...dispatchInfo, vehiclePlate: e.target.value})} className="md:col-span-2 w-full px-3 py-2 bg-black/50 border border-white/10 rounded-lg outline-none focus:border-indigo-500 text-sm md:text-sm text-base font-mono" />
                       </div>
-                      <button onClick={() => updateOrderStatus(selectedOrder.id, 'dispatched')} className="w-full py-3 bg-indigo-500/20 text-indigo-400 font-bold text-[10px] md:text-xs uppercase tracking-widest rounded-lg hover:bg-indigo-500/30 transition-colors">
-                        Save Dispatch Intel
-                      </button>
+                      <button onClick={() => updateOrderStatus(selectedOrder.id, 'dispatched')} className="w-full py-3 bg-indigo-500/20 text-indigo-400 font-bold text-[10px] md:text-xs uppercase tracking-widest rounded-lg hover:bg-indigo-500/30 transition-colors">Save Dispatch Intel</button>
                     </div>
                   )}
 
@@ -760,7 +740,6 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
 
-                {/* RIGHT COLUMN: Manifest & Financials */}
                 <div className="space-y-6 md:space-y-8 bg-[#111111] p-4 md:p-6 rounded-2xl border border-white/5 h-fit">
                   <div className="space-y-3 md:space-y-4">
                     <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Materials Manifest</h3>
@@ -771,9 +750,7 @@ export default function AdminCommandCenter() {
                             <p className="font-bold text-xs md:text-sm line-clamp-1">{item.title}</p>
                             <p className="text-[10px] md:text-xs opacity-50 mt-0.5">{(Number(item.quantity) || 1)} {item.metric || 'Units'} @ {(Number(item.price)||0).toLocaleString()} ETB</p>
                           </div>
-                          <p className="font-black text-emerald-400 text-sm whitespace-nowrap">
-                            {((Number(item.price)||0) * (Number(item.quantity) || 1)).toLocaleString()}
-                          </p>
+                          <p className="font-black text-emerald-400 text-sm whitespace-nowrap">{((Number(item.price)||0) * (Number(item.quantity) || 1)).toLocaleString()}</p>
                         </div>
                       ))}
                     </div>
@@ -796,25 +773,22 @@ export default function AdminCommandCenter() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ========================================= */}
-      {/* PROFORMA INVOICE PRINT MODAL */}
-      {/* ========================================= */}
+      {/* ========================================================= */}
+      {/* PROFORMA INVOICE (MEMORY-SAFE) */}
+      {/* ========================================================= */}
       {showProforma && selectedOrder && (
         <div className="fixed inset-0 z-[200] bg-white text-black p-4 md:p-12 overflow-y-auto print:p-0">
-          <div className="max-w-4xl mx-auto bg-white min-h-[1056px] print:min-h-0 relative shadow-2xl print:shadow-none p-8 md:p-16 border print:border-none">
-            
+          <div className="max-w-4xl mx-auto bg-white min-h-[1056px] print:min-h-0 relative shadow-2xl print:shadow-none p-8 md:p-16 border print:border-none animate-in fade-in zoom-in-95">
             <div className="print:hidden flex justify-end gap-4 mb-8 border-b pb-4">
               <button onClick={() => setShowProforma(false)} className="px-4 py-2 border border-gray-300 rounded font-bold hover:bg-gray-50 transition-colors">Close</button>
               <button onClick={() => window.print()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold transition-colors flex items-center gap-2"><Printer size={18} /> Print / Save as PDF</button>
             </div>
-
             <div className="print:block">
               <div className="flex justify-between items-start mb-16">
                 <div>
@@ -829,7 +803,6 @@ export default function AdminCommandCenter() {
                   <p className="text-sm text-gray-600 mt-1">Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
               </div>
-
               <div className="mb-12 p-6 border-2 border-gray-100 rounded-xl bg-gray-50/50">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-3 border-b pb-2">Billed To</h3>
                 <p className="font-black text-lg text-gray-900">{selectedOrder.customerName || "Unnamed Client"}</p>
@@ -841,7 +814,6 @@ export default function AdminCommandCenter() {
                   </div>
                 )}
               </div>
-
               <table className="w-full text-left mb-12">
                 <thead>
                   <tr className="border-b-2 border-gray-800 text-gray-800">
@@ -862,37 +834,19 @@ export default function AdminCommandCenter() {
                   ))}
                 </tbody>
               </table>
-
               <div className="flex justify-end mb-16">
                 <div className="w-72 space-y-3">
-                  <div className="flex justify-between text-gray-600">
-                    <span className="font-bold">Subtotal</span> 
-                    <span>{(Number(selectedOrder.subtotal)||0).toLocaleString()} ETB</span>
-                  </div>
+                  <div className="flex justify-between text-gray-600"><span className="font-bold">Subtotal</span><span>{(Number(selectedOrder.subtotal)||0).toLocaleString()} ETB</span></div>
                   {Number(selectedOrder.finalAmount) > Number(selectedOrder.subtotal) && (
-                    <div className="flex justify-between text-gray-600">
-                      <span className="font-bold">VAT ({systemSettings.taxRate || 15}%)</span> 
-                      <span>{((Number(selectedOrder.finalAmount)||0) - (Number(selectedOrder.subtotal)||0)).toLocaleString()} ETB</span>
-                    </div>
+                    <div className="flex justify-between text-gray-600"><span className="font-bold">VAT ({systemSettings.taxRate || 15}%)</span><span>{((Number(selectedOrder.finalAmount)||0) - (Number(selectedOrder.subtotal)||0)).toLocaleString()} ETB</span></div>
                   )}
-                  <div className="flex justify-between border-t-2 border-gray-800 pt-3 text-xl font-black text-gray-900">
-                    <span className="uppercase">Total Due</span> 
-                    <span>{(Number(selectedOrder.finalAmount)||0).toLocaleString()} ETB</span>
-                  </div>
+                  <div className="flex justify-between border-t-2 border-gray-800 pt-3 text-xl font-black text-gray-900"><span className="uppercase">Total Due</span><span>{(Number(selectedOrder.finalAmount)||0).toLocaleString()} ETB</span></div>
                 </div>
-              </div>
-
-              <div className="pt-8 border-t border-gray-200 text-xs text-gray-500 leading-relaxed text-center">
-                <p className="font-bold mb-1 text-gray-700">Official Proforma Statement</p>
-                <p>This document is a proforma invoice. Final delivery times and specific material prices are subject to change based on logistics constraints and on-site inspection.</p>
-                <p className="mt-1">Valid for 15 days from the date of issuance.</p>
               </div>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
 }
-
