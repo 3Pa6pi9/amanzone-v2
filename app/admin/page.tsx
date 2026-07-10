@@ -9,7 +9,6 @@ import {
   TrendingUp, Truck, MapPin, Phone, User, FileText, ChevronRight, UploadCloud, Building2, ChevronDown, Menu, Mail, Lock, Briefcase, Clock, Printer, Megaphone, Video
 } from "lucide-react";
 
-// --- PREDEFINED MATRIX ---
 const PREDEFINED_MATRIX: Record<string, string[]> = {
   "የግንባታ ብረት": ["የሀገር ውስጥ", "የቱርክ ብረት"],
   "ቆርቆሮ": ["መደበኛ ቆርቆሮ", "ኤጋ ቆርቆሮ", "ታይልስ ቆርቆሮ"],
@@ -25,7 +24,8 @@ const PREDEFINED_MATRIX: Record<string, string[]> = {
 
 const initialFormState = {
   title: "", price: "", description: "", menu: "የግንባታ ብረት", submenu: "የሀገር ውስጥ", type: "Standard", 
-  metric: "", size: "", color: "", imageUrl: "", stock: "", warehouse: ""
+  metric: "", size: "", color: "", imageUrl: "", stock: "", warehouse: "", 
+  allowCustomInput: false, customInputLabel: ""
 };
 
 const initialSettingsState = {
@@ -34,7 +34,6 @@ const initialSettingsState = {
   adminPassword: "AmanZone2026"
 };
 
-// MEMORY-SAFE DATE FORMATTER
 const formatDate = (val: any) => {
   if (!val) return "N/A";
   try {
@@ -139,44 +138,18 @@ export default function AdminCommandCenter() {
   const vatCollected = useMemo(() => orders.reduce((sum, order) => sum + ((Number(order.finalAmount) || 0) - (Number(order.subtotal) || 0)), 0), [orders]);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsAuthenticating(true);
-    setAuthError("");
-
-    if (authInput === "RESET") {
-      localStorage.clear();
-      window.location.reload();
-      return;
-    }
-
+    e.preventDefault(); setIsAuthenticating(true); setAuthError("");
+    if (authInput === "RESET") { localStorage.clear(); window.location.reload(); return; }
     try {
       const settingsSnap = await getDoc(doc(db, "settings", "global"));
       let currentPassword = "AmanZone2026"; 
-
-      if (settingsSnap.exists()) {
-        const data = settingsSnap.data();
-        if (data && data.adminPassword) currentPassword = data.adminPassword;
-      }
-
-      if (authInput === currentPassword || authInput === "AmanZone2026" || authInput === "12345") {
-        localStorage.setItem("az_admin_session", "active");
-        setIsAuthenticated(true);
-      } else {
-        setAuthError("Invalid Security Clearance");
-        setAuthInput("");
-      }
-    } catch (error) {
-      setAuthError("Network error checking clearance.");
-    } finally {
-      setIsAuthenticating(false);
-    }
+      if (settingsSnap.exists()) { const data = settingsSnap.data(); if (data && data.adminPassword) currentPassword = data.adminPassword; }
+      if (authInput === currentPassword || authInput === "AmanZone2026" || authInput === "12345") { localStorage.setItem("az_admin_session", "active"); setIsAuthenticated(true); } 
+      else { setAuthError("Invalid Security Clearance"); setAuthInput(""); }
+    } catch (error) { setAuthError("Network error checking clearance."); } finally { setIsAuthenticating(false); }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("az_admin_session");
-    setIsAuthenticated(false);
-  };
-
+  const handleLogout = () => { localStorage.removeItem("az_admin_session"); setIsAuthenticated(false); };
   const showToast = (msg: string, type = "success") => { setToast({ show: true, msg, type }); setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000); };
   
   const openAddMenu = () => {
@@ -191,7 +164,8 @@ export default function AdminCommandCenter() {
       title: product.title || "", price: product.price || "", description: product.description || "",
       menu: product.menu || "", submenu: product.submenu || "", type: product.type || "Standard",
       metric: product.metric || "", size: product.size || "", color: product.color || "",
-      imageUrl: product.imageUrl || "", stock: product.stock?.toString() || "", warehouse: product.warehouse || ""
+      imageUrl: product.imageUrl || "", stock: product.stock?.toString() || "", warehouse: product.warehouse || "",
+      allowCustomInput: product.allowCustomInput || false, customInputLabel: product.customInputLabel || ""
     });
     setEditingId(product.id);
     setIsNewMenu(false); setIsNewSubmenu(false); setIsNewType(false); setIsNewMetric(false); setIsNewWarehouse(false);
@@ -210,26 +184,18 @@ export default function AdminCommandCenter() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingImage(true);
-    try { 
-      const data = await uploadToCloudinary(file);
-      setFormData(prev => ({ ...prev, imageUrl: data.url })); 
-      showToast("Asset uploaded."); 
-    } catch { showToast("Upload failed.", "error"); } finally { setIsUploadingImage(false); }
+    try { const data = await uploadToCloudinary(file); setFormData(prev => ({ ...prev, imageUrl: data.url })); showToast("Asset uploaded."); } 
+    catch { showToast("Upload failed.", "error"); } finally { setIsUploadingImage(false); }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingLogo(true);
-    try { 
-      const data = await uploadToCloudinary(file);
-      setSystemSettings((prev: any) => ({ ...prev, logoUrl: data.url })); 
-      showToast("Logo uploaded."); 
-    } catch { showToast("Logo upload failed.", "error"); } finally { setIsUploadingLogo(false); }
+    try { const data = await uploadToCloudinary(file); setSystemSettings((prev: any) => ({ ...prev, logoUrl: data.url })); showToast("Logo uploaded."); } 
+    catch { showToast("Logo upload failed.", "error"); } finally { setIsUploadingLogo(false); }
   };
 
   const handleMarketingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    setIsUploadingMarketing(true);
+    const files = e.target.files; if (!files || files.length === 0) return; setIsUploadingMarketing(true);
     try {
       showToast(`Uploading ${files.length} asset(s)...`);
       const fileArray = Array.from(files);
@@ -253,7 +219,8 @@ export default function AdminCommandCenter() {
         title: formData.title || "Untitled", price: formData.price?.toString() || "0", description: formData.description || "",
         menu: formData.menu || "Uncategorized", submenu: formData.submenu || "General", type: formData.type || "Standard",
         metric: formData.metric || "Unit", size: formData.size || "", color: formData.color || "", imageUrl: formData.imageUrl || "",
-        stock: parseInt(formData.stock as string) || 0, warehouse: formData.warehouse || "Main Hub", updatedAt: new Date().toISOString() 
+        stock: parseInt(formData.stock as string) || 0, warehouse: formData.warehouse || "Main Hub", updatedAt: new Date().toISOString(),
+        allowCustomInput: formData.allowCustomInput || false, customInputLabel: formData.customInputLabel || ""
       };
       Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
       if (editingId) { await updateDoc(doc(db, "inventory", editingId), payload); showToast("Material updated."); } 
@@ -388,7 +355,6 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- ORDERS TAB --- */}
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8"><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Executive Overview</h2></header>
@@ -455,7 +421,6 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- MARKETING & ADS TAB --- */}
         {activeTab === "marketing" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -495,7 +460,6 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- SETTINGS TAB --- */}
         {activeTab === "settings" && (
           <div className="animate-in fade-in duration-300 pb-20">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -552,9 +516,8 @@ export default function AdminCommandCenter() {
       </main>
 
       {/* ========================================================= */}
-      {/* DRAWERS: UNMOUNTED WHEN CLOSED TO SAVE RAM */}
+      {/* INVENTORY DRAWER */}
       {/* ========================================================= */}
-      
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
@@ -612,6 +575,20 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
 
+                {/* --- CUSTOM MEASUREMENT TOGGLE --- */}
+                <div className="p-4 rounded-xl border border-pink-500/20 bg-pink-900/10 space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={formData.allowCustomInput || false} onChange={e => setFormData({...formData, allowCustomInput: e.target.checked})} className="w-4 h-4 rounded border-gray-400 text-pink-600 focus:ring-pink-500 bg-white/10" />
+                    <span className="text-xs md:text-sm font-bold text-pink-400 uppercase tracking-widest">Enable Custom Client Instructions</span>
+                  </label>
+                  {formData.allowCustomInput && (
+                    <div className="space-y-2 animate-in fade-in zoom-in-95">
+                      <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Input Label (What are you asking the client?)</label>
+                      <input type="text" placeholder="e.g. Specify Cut Length (meters)" value={formData.customInputLabel || ""} onChange={e => setFormData({...formData, customInputLabel: e.target.value})} className="w-full px-3 py-2 bg-black border border-white/10 rounded-lg outline-none focus:border-pink-500 text-base md:text-sm" />
+                    </div>
+                  )}
+                </div>
+
                 <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-900/10 space-y-4">
                   <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-emerald-400 border-b border-emerald-500/20 pb-2">Location & Stock</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -639,9 +616,8 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
 
-                {/* --- SIZE AND COLOR CONFIGURATORS --- */}
                 <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-900/10 space-y-4">
-                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-indigo-400 border-b border-indigo-500/20 pb-2">Client Options (Optional)</h3>
+                  <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-indigo-400 border-b border-indigo-500/20 pb-2">Predefined Variants (Optional)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest opacity-70">Available Colors</label>
@@ -731,6 +707,7 @@ export default function AdminCommandCenter() {
         </div>
       )}
 
+      {/* --- ORDER DRAWER --- */}
       {isOrderDrawerOpen && selectedOrder && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div onClick={() => setIsOrderDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
@@ -826,10 +803,13 @@ export default function AdminCommandCenter() {
                             </div>
                             <p className="font-black text-emerald-400 text-sm whitespace-nowrap">{((Number(item.price)||0) * (Number(item.quantity) || 1)).toLocaleString()}</p>
                           </div>
-                          {(item.selectedSize || item.selectedColor) && (
-                            <div className="mt-2 flex gap-2">
+                          
+                          {/* SHOW CUSTOM INSTRUCTIONS / VARIANTS */}
+                          {(item.selectedSize || item.selectedColor || item.customInstruction) && (
+                            <div className="mt-2 flex flex-wrap gap-2">
                               {item.selectedSize && <span className="text-[9px] bg-white/10 px-2 py-0.5 rounded text-gray-300">Size: {item.selectedSize}</span>}
                               {item.selectedColor && <span className="text-[9px] bg-white/10 px-2 py-0.5 rounded text-gray-300">Color: {item.selectedColor}</span>}
+                              {item.customInstruction && <span className="text-[9px] bg-pink-500/20 border border-pink-500/30 px-2 py-0.5 rounded text-pink-400 font-mono">Req: {item.customInstruction}</span>}
                             </div>
                           )}
                         </div>
@@ -860,6 +840,7 @@ export default function AdminCommandCenter() {
         </div>
       )}
 
+      {/* --- PROFORMA INVOICE PRINT MODAL --- */}
       {showProforma && selectedOrder && (
         <div className="fixed inset-0 z-[200] bg-white text-black p-4 md:p-12 overflow-y-auto print:p-0">
           <div className="max-w-4xl mx-auto bg-white min-h-[1056px] print:min-h-0 relative shadow-2xl print:shadow-none p-8 md:p-16 border print:border-none animate-in fade-in zoom-in-95">
@@ -906,10 +887,11 @@ export default function AdminCommandCenter() {
                     <tr key={i} className="text-gray-800">
                       <td className="py-4 px-2 font-medium">
                         {item.title || "Unnamed Material"}
-                        {(item.selectedSize || item.selectedColor) && (
+                        {(item.selectedSize || item.selectedColor || item.customInstruction) && (
                           <span className="block text-[10px] text-gray-500 mt-0.5">
                             {item.selectedSize && `Size: ${item.selectedSize} `}
-                            {item.selectedColor && `Color: ${item.selectedColor}`}
+                            {item.selectedColor && `Color: ${item.selectedColor} `}
+                            {item.customInstruction && <span className="text-pink-600 font-mono"> | Req: {item.customInstruction}</span>}
                           </span>
                         )}
                       </td>
