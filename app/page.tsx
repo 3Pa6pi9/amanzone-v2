@@ -30,9 +30,6 @@ const initialSettingsState = {
   phone: "", email: "", address: "Addis Ababa, Ethiopia", taxRate: 15, deliveryBaseFee: 250, aiEnabled: true
 };
 
-// =======================================================================
-// UNIVERSAL AD MEDIA RENDERER
-// =======================================================================
 const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
   if (!asset) return null;
   return asset.type === 'video' ? (
@@ -43,7 +40,7 @@ const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
 };
 
 // =======================================================================
-// ISOLATED PRODUCT CARD WITH UNCONSTRAINED INPUT & VARIABLES
+// ISOLATED PRODUCT CARD WITH CUSTOM MEASUREMENT INPUTS
 // =======================================================================
 const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: (item: any) => void }) => {
   const availableColors = item.color ? item.color.split(',').map((c:string) => c.trim()).filter(Boolean) : [];
@@ -52,6 +49,9 @@ const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: 
   const [localQty, setLocalQty] = useState<number | string>(1);
   const [selectedColor, setSelectedColor] = useState(availableColors[0] || "");
   const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
+  
+  // NEW: State for Custom Cutting/Measurement Instructions
+  const [customInstruction, setCustomInstruction] = useState("");
 
   const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.value === "") setLocalQty("");
@@ -66,14 +66,20 @@ const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: 
 
   const handlePushToCart = () => {
     const finalQty = typeof localQty === 'number' && localQty >= 1 ? localQty : 1;
+    // We bind the custom instruction to the cart ID so different cuts stay separate
+    const uniqueHash = Math.random().toString(36).substring(2, 8);
+    const instructionHash = customInstruction ? `-${uniqueHash}` : '';
+    
     onAddToCart({
       ...item,
-      cartItemId: `${item.id}-${selectedSize}-${selectedColor}`,
+      cartItemId: `${item.id}-${selectedSize}-${selectedColor}${instructionHash}`,
       quantity: finalQty,
       selectedColor,
-      selectedSize
+      selectedSize,
+      customInstruction
     });
     setLocalQty(1);
+    setCustomInstruction("");
   };
 
   return (
@@ -96,8 +102,22 @@ const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: 
         <h4 className="font-bold group-hover:text-white transition-colors truncate text-lg md:text-xl mb-1">{item.title}</h4>
         <p className="opacity-50 truncate text-[10px] md:text-xs mb-3">{item.submenu || ''} {item.type || ''}</p>
         
+        {/* CUSTOM MEASUREMENT INPUT */}
+        {item.allowCustomInput && (
+          <div className="mb-3 mt-auto">
+            <input 
+              type="text" 
+              placeholder={item.customInputLabel || "Enter custom measurements..."} 
+              value={customInstruction} 
+              onChange={(e) => setCustomInstruction(e.target.value)} 
+              className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-[10px] md:text-xs outline-none focus:border-emerald-500 font-mono transition-colors" 
+            />
+          </div>
+        )}
+
+        {/* STATIC PREDEFINED VARIABLES */}
         {(availableColors.length > 0 || availableSizes.length > 0) && (
-          <div className="flex gap-2 mb-4 mt-auto">
+          <div className={`flex gap-2 mb-3 ${!item.allowCustomInput ? 'mt-auto' : ''}`}>
             {availableColors.length > 0 && (
               <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="flex-1 bg-black border border-white/10 rounded-lg px-2 py-1.5 text-[10px] md:text-xs outline-none">
                 {availableColors.map((c: string) => <option key={c} value={c}>{c}</option>)}
@@ -111,13 +131,13 @@ const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: 
           </div>
         )}
 
-        <div className="mt-auto flex justify-between items-end pt-4 border-t border-white/10">
+        <div className={`flex justify-between items-end pt-4 border-t border-white/10 ${!item.allowCustomInput && availableColors.length === 0 && availableSizes.length === 0 ? 'mt-auto' : ''}`}>
           <div className="flex flex-col truncate pr-2">
             <span className="font-black text-emerald-400 leading-none truncate text-xl md:text-2xl">{(parseFloat(item.price) || 0).toLocaleString()}</span>
             <span className="text-[8px] md:text-[10px] opacity-50 uppercase tracking-widest mt-1 truncate">ETB / {item.metric || "Unit"}</span>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="flex items-center bg-black border border-white/10 rounded-lg p-0.5 h-full w-[60px] md:w-[70px]">
               <input type="number" value={localQty} onChange={handleQtyChange} onBlur={handleQtyBlur} className="w-full bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" style={{ MozAppearance: 'textfield' }} />
             </div>
@@ -298,17 +318,13 @@ export default function PremiumStorefront() {
   const footerAd = activeAds.length > 2 ? activeAds[2] : null;
   const inlineAds = activeAds.length > 3 ? activeAds.slice(3) : [];
 
-  // Weave ads into the product catalog
   const catalogMixedItems: any[] = [];
   let inlineAdCount = 0;
   
   filteredProducts.forEach((product, i) => {
     catalogMixedItems.push({ isAd: false, data: product });
-    
-    // Inject an ad every 4 items if we have inline ads
     if ((i + 1) % 4 === 0 && inlineAds.length > 0) {
       const ad = inlineAds[inlineAdCount % inlineAds.length];
-      // Cycle through 4 crazy shape variants
       catalogMixedItems.push({ isAd: true, data: ad, shapeVariant: inlineAdCount % 4 });
       inlineAdCount++;
     }
@@ -432,7 +448,6 @@ export default function PremiumStorefront() {
           ) : catalogMixedItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 md:py-32 opacity-50 border border-dashed border-white/10 rounded-[1.5rem] md:rounded-[2rem] bg-[#111111]"><PackageSearch size={48} className="mb-4 md:mb-6 opacity-30 md:w-16 md:h-16" /><p className="text-base md:text-xl font-bold">{t("No materials match this configuration.", "ምንም እቃዎች አልተገኙም።")}</p></div>
           ) : (
-            // GRID-FLOW-ROW-DENSE allows the weird ad shapes to lock in without leaving holes
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 grid-flow-row-dense">
               {catalogMixedItems.map((item, i) => {
                 if (!item.isAd) {
@@ -442,21 +457,12 @@ export default function PremiumStorefront() {
                     </div>
                   );
                 } else {
-                  // --- THE CRAZY SHAPE VARIANTS ---
                   let shapeClasses = "";
                   switch (item.shapeVariant) {
-                    case 0: // Giant Vertical Pillar
-                      shapeClasses = "col-span-1 row-span-2 rounded-[5rem] h-[30rem] lg:h-auto min-h-[400px]";
-                      break;
-                    case 1: // Diagonal Leaf
-                      shapeClasses = "col-span-1 sm:col-span-2 row-span-1 rounded-bl-[4rem] rounded-tr-[4rem] h-[16rem] md:h-[24rem]";
-                      break;
-                    case 2: // Perfect Circle / Oval
-                      shapeClasses = "col-span-1 row-span-1 aspect-square rounded-full scale-95 md:scale-90 hover:scale-100";
-                      break;
-                    case 3: // Ultra-Wide Ribbon
-                      shapeClasses = "col-span-1 sm:col-span-2 lg:col-span-3 h-32 md:h-48 rounded-[2rem]";
-                      break;
+                    case 0: shapeClasses = "col-span-1 row-span-2 rounded-[5rem] h-[30rem] lg:h-auto min-h-[400px]"; break;
+                    case 1: shapeClasses = "col-span-1 sm:col-span-2 row-span-1 rounded-bl-[4rem] rounded-tr-[4rem] h-[16rem] md:h-[24rem]"; break;
+                    case 2: shapeClasses = "col-span-1 row-span-1 aspect-square rounded-full scale-95 md:scale-90 hover:scale-100"; break;
+                    case 3: shapeClasses = "col-span-1 sm:col-span-2 lg:col-span-3 h-32 md:h-48 rounded-[2rem]"; break;
                   }
 
                   return (
@@ -485,13 +491,12 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- FLOATING CONTROLS --- */}
+      {/* --- FLOATING CONTROLS & CHAT --- */}
       <div className="fixed bottom-4 md:bottom-6 right-4 md:right-6 z-40 flex flex-col gap-3">
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className={`p-3 rounded-full bg-black/80 backdrop-blur-md border border-white/20 shadow-xl transition-all duration-300 flex items-center justify-center ${scrolled ? 'translate-x-0 opacity-100' : 'translate-x-20 opacity-0 pointer-events-none'}`}><ChevronDown size={20} className="rotate-180" /></button>
         {systemSettings.aiEnabled && <button onClick={() => setIsAiOpen(true)} className="p-3 md:p-4 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-transform hover:scale-110 flex items-center justify-center bg-indigo-600 text-white animate-bounce-slow"><MessageSquare size={24} /></button>}
       </div>
 
-      {/* --- AI CHAT DRAWER --- */}
       <div className={`fixed bottom-4 md:bottom-6 right-4 md:right-24 z-[70] w-[calc(100vw-2rem)] md:w-96 bg-[#0A0A0F] border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col transition-all duration-300 origin-bottom-right ${isAiOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`} style={{ height: '500px', maxHeight: '80vh' }}>
         <div className="p-4 border-b border-indigo-500/30 flex justify-between items-center bg-indigo-900/20 rounded-t-3xl">
           <div className="flex items-center gap-3">
@@ -551,7 +556,7 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- CART DRAWER --- */}
+      {/* --- CART DRAWER (WITH CUSTOM INSTRUCTIONS) --- */}
       <div className={`fixed inset-0 z-50 transition-all duration-500 ${isCartOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div onClick={() => {setIsCartOpen(false); setCheckoutStep(1);}} className={`absolute inset-0 bg-black/80 transition-opacity duration-300 ${isCartOpen ? 'opacity-100' : 'opacity-0'}`} />
         <div className={`absolute top-0 right-0 h-full w-full md:w-[500px] bg-[#050505] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -569,25 +574,38 @@ export default function PremiumStorefront() {
                   ) : (
                     <div className="flex-1 space-y-3 md:space-y-4">
                       {cartItems.map(item => (
-                        <div key={item.cartItemId} className="flex gap-3 md:gap-4 items-center bg-[#111111] border border-white/10 p-2.5 md:p-3 rounded-2xl">
+                        <div key={item.cartItemId} className="flex gap-3 md:gap-4 items-start bg-[#111111] border border-white/10 p-2.5 md:p-3 rounded-2xl">
                           <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-black/50 border border-white/5 overflow-hidden flex-shrink-0">
                             {item.imageUrl ? <img src={item.imageUrl} alt={item.title} loading="lazy" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-3 opacity-30" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-xs md:text-sm mb-0.5 truncate">{item.title}</h4>
+                            <div className="flex justify-between items-start">
+                               <h4 className="font-bold text-xs md:text-sm mb-0.5 truncate">{item.title}</h4>
+                               <button onClick={() => removeFromCart(item.cartItemId)} className="text-red-400/50 hover:text-red-400 transition-colors p-1"><Trash2 size={14} /></button>
+                            </div>
                             <p className="text-[10px] md:text-xs opacity-70 mb-1">{(parseFloat(item.price) || 0).toLocaleString()} ETB</p>
+                            
                             {(item.selectedSize || item.selectedColor) && (
-                              <div className="flex gap-1 mb-2">
+                              <div className="flex gap-1 mb-1">
                                 {item.selectedSize && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300">Sz: {item.selectedSize}</span>}
                                 {item.selectedColor && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300">Col: {item.selectedColor}</span>}
                               </div>
                             )}
+
+                            {/* CUSTOM INSTRUCTION DISPLAY */}
+                            {item.customInstruction && (
+                              <div className="mb-2">
+                                <span className="text-[9px] text-pink-400 font-mono bg-pink-500/10 px-1.5 py-0.5 rounded block truncate border border-pink-500/20">
+                                  {item.customInstruction}
+                                </span>
+                              </div>
+                            )}
+
                             <div className="flex items-center gap-1 mt-1 bg-black rounded-lg p-0.5 border border-white/10 w-[60px] md:w-[70px]">
                               <input type="number" value={item.quantity} onChange={(e) => updateCartQuantity(item.cartItemId, e.target.value)} onBlur={(e) => handleCartQuantityBlur(item.cartItemId, e.target.value)} className="w-full bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" style={{ MozAppearance: 'textfield' }} />
                             </div>
                           </div>
-                          <div className="flex flex-col items-end justify-between h-full py-1">
-                            <button onClick={() => removeFromCart(item.cartItemId)} className="text-red-400/50 hover:text-red-400 transition-colors mb-2 p-1"><Trash2 size={14} /></button>
+                          <div className="flex flex-col items-end justify-end h-full pt-6">
                             <span className="font-black text-emerald-400 text-xs md:text-sm">{((parseFloat(item.price) || 0) * (parseInt(item.quantity) || 1)).toLocaleString()}</span>
                           </div>
                         </div>
