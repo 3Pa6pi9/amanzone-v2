@@ -8,7 +8,7 @@ import {
   ArrowRight, ShoppingCart, PackageSearch, X, Loader2, Trash2, 
   Image as ImageIcon, Search, CheckCircle2, ChevronDown, ChevronRight, 
   MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu, Mail,
-  LayoutGrid, List as ListIcon, MessageSquare, Send
+  MessageSquare, Send
 } from "lucide-react";
 
 // --- PREDEFINED MATRIX ---
@@ -28,6 +28,18 @@ const PREDEFINED_MATRIX: Record<string, string[]> = {
 const initialSettingsState = {
   companyName: "AmanZone Trading PLC", slogan: "Industrial Grade. Delivered.", logoUrl: "",
   phone: "", email: "", address: "Addis Ababa, Ethiopia", taxRate: 15, deliveryBaseFee: 250, aiEnabled: true
+};
+
+// =======================================================================
+// UNIVERSAL AD MEDIA RENDERER
+// =======================================================================
+const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
+  if (!asset) return null;
+  return asset.type === 'video' ? (
+    <video src={asset.url} autoPlay loop muted playsInline className={className} />
+  ) : (
+    <img src={asset.url} alt="AmanZone Ad" loading="lazy" className={className} />
+  );
 };
 
 // =======================================================================
@@ -65,7 +77,7 @@ const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: 
   };
 
   return (
-    <div className="group rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 bg-[#111111] border border-white/10 transition-transform duration-300 hover:-translate-y-2 hover:shadow-2xl relative overflow-hidden flex flex-col">
+    <div className="group rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 bg-[#111111] border border-white/10 transition-transform duration-300 hover:-translate-y-2 hover:shadow-2xl relative overflow-hidden flex flex-col h-full">
       {item.imageUrl ? (
         <div className="overflow-hidden bg-black/40 border border-white/5 relative flex-shrink-0 w-full h-48 md:h-56 mb-4 md:mb-6 rounded-[1rem] md:rounded-2xl">
           <img src={item.imageUrl} alt={item.title || "Product"} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
@@ -106,7 +118,7 @@ const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: 
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-black border border-white/10 rounded-lg p-0.5 h-full w-[80px]">
+            <div className="flex items-center bg-black border border-white/10 rounded-lg p-0.5 h-full w-[60px] md:w-[70px]">
               <input type="number" value={localQty} onChange={handleQtyChange} onBlur={handleQtyBlur} className="w-full bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" style={{ MozAppearance: 'textfield' }} />
             </div>
             <button onClick={handlePushToCart} className="rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-transform active:scale-95 shadow-lg p-2 md:p-2.5">
@@ -279,8 +291,31 @@ export default function PremiumStorefront() {
     );
   };
 
+  // --- AD DISTRIBUTION LOGIC ---
+  const activeAds = marketingAssets.filter(ad => ad.active);
+  const heroAd = activeAds.length > 0 ? activeAds[0] : null;
+  const floatingAd = activeAds.length > 1 ? activeAds[1] : null;
+  const footerAd = activeAds.length > 2 ? activeAds[2] : null;
+  const inlineAds = activeAds.length > 3 ? activeAds.slice(3) : [];
+
+  // Weave ads into the product catalog
+  const catalogMixedItems: any[] = [];
+  let inlineAdCount = 0;
+  
+  filteredProducts.forEach((product, i) => {
+    catalogMixedItems.push({ isAd: false, data: product });
+    
+    // Inject an ad every 4 items if we have inline ads
+    if ((i + 1) % 4 === 0 && inlineAds.length > 0) {
+      const ad = inlineAds[inlineAdCount % inlineAds.length];
+      // Cycle through 4 crazy shape variants
+      catalogMixedItems.push({ isAd: true, data: ad, shapeVariant: inlineAdCount % 4 });
+      inlineAdCount++;
+    }
+  });
+
   return (
-    <div className="relative min-h-screen font-sans scroll-smooth" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-main)' }}>
+    <div className="relative min-h-screen font-sans scroll-smooth overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-main)' }}>
       <div className="fixed top-[-20%] left-[-10%] w-[50rem] h-[50rem] pointer-events-none transform-gpu" style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 60%)', opacity: 0.12 }} />
       <div className="fixed bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] pointer-events-none transform-gpu opacity-10" style={{ background: 'radial-gradient(circle, #059669 0%, transparent 60%)' }} />
 
@@ -310,12 +345,34 @@ export default function PremiumStorefront() {
         </div>
       </header>
 
+      {/* --- FLOATING ORB AD (Z-INDEXED) --- */}
+      {floatingAd && (
+        <div className="hidden lg:block fixed top-1/3 left-6 z-30 pointer-events-auto group">
+          <div className="relative w-24 h-24 rounded-[40%_60%_70%_30%/40%_50%_60%_50%] border-4 border-indigo-500/20 shadow-[0_0_40px_rgba(79,70,229,0.3)] overflow-hidden transition-all duration-700 hover:w-64 hover:h-64 hover:rounded-[2rem] hover:border-emerald-500 hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] cursor-pointer bg-black z-30">
+             <AdMedia asset={floatingAd} className="w-full h-full object-cover scale-150 group-hover:scale-100 transition-transform duration-700" />
+             <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors duration-500" />
+          </div>
+        </div>
+      )}
+
       <main className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-6 pt-28 md:pt-40 pb-10 flex flex-col items-center text-center">
         <div className="inline-flex items-center gap-2 md:gap-3 px-4 py-2 md:px-5 md:py-2.5 rounded-full bg-white/5 border border-white/10 mb-6 md:mb-8">
           <span className="relative flex h-2 w-2 md:h-2.5 md:w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 md:h-2.5 md:w-2.5 bg-emerald-500"></span></span>
           <span className="text-[10px] md:text-xs font-semibold tracking-widest text-gray-300 uppercase">{t("Live Sync Active", "ቀጥታ ስርጭት ክፍት ነው")}</span>
         </div>
         <h2 className="text-4xl sm:text-5xl md:text-8xl font-black tracking-tighter mb-4 md:mb-6 leading-[1.1]">{renderSlogan()}</h2>
+        
+        {/* --- HERO PANORAMIC AD --- */}
+        {heroAd && (
+          <div className="w-full mt-6 md:mt-10 mb-4 animate-in fade-in slide-in-from-bottom-10 duration-1000">
+            <div className="relative w-full h-20 md:h-32 lg:h-48 rounded-[3rem] md:rounded-[5rem] rounded-bl-none md:rounded-bl-none border border-white/10 shadow-[0_20px_50px_-12px_rgba(16,185,129,0.2)] overflow-hidden group">
+              <AdMedia asset={heroAd} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute left-6 md:left-10 top-1/2 -translate-y-1/2 font-black text-white/50 tracking-[0.5em] uppercase text-[8px] md:text-xs rotate-[-90deg] origin-left">Sponsored</div>
+            </div>
+          </div>
+        )}
+
         <div className="relative w-full max-w-xl mt-4 md:mt-8">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={18} />
           <input 
@@ -325,37 +382,7 @@ export default function PremiumStorefront() {
         </div>
       </main>
 
-      {/* --- ASYMMETRICAL MARKETING ENGINE --- */}
-      {marketingAssets.length > 0 && (
-        <section className="w-full max-w-[1400px] mx-auto px-4 md:px-6 mb-16">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 md:auto-rows-[250px]">
-            {marketingAssets.filter(ad => ad.active).map((ad, i) => {
-              // Create dynamic, creative shapes based on index
-              const isLarge = i % 5 === 0;
-              const isWide = i % 5 === 1 || i % 5 === 4;
-              const isTall = i % 5 === 2;
-              
-              let spanClass = "col-span-1 row-span-1 rounded-3xl";
-              if (isLarge) spanClass = "md:col-span-2 md:row-span-2 rounded-[3rem] h-[300px] md:h-auto";
-              else if (isWide) spanClass = "md:col-span-2 md:row-span-1 rounded-[2rem] rounded-tr-[4rem] h-[250px] md:h-auto";
-              else if (isTall) spanClass = "md:col-span-1 md:row-span-2 rounded-[2.5rem] rounded-bl-[4rem] h-[350px] md:h-auto";
-
-              return (
-                <div key={ad.id} className={`relative overflow-hidden shadow-2xl group ${spanClass} border border-white/10 bg-[#111111]`}>
-                  {ad.type === 'video' ? (
-                    <video src={ad.url} autoPlay loop muted playsInline className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-105" />
-                  ) : (
-                    <img src={ad.url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-105" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <section id="catalog" className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-6 pb-40 flex flex-col md:flex-row gap-6 md:gap-8">
+      <section id="catalog" className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-6 pb-20 flex flex-col md:flex-row gap-6 md:gap-8">
         <div className="md:hidden w-full sticky top-[72px] z-30">
           <button onClick={() => setIsMobileMatrixOpen(!isMobileMatrixOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-[#111111] border border-white/10 rounded-xl font-bold shadow-2xl">
             <span className="flex items-center gap-2"><Menu size={18} className="text-emerald-400" /> {t("Material Matrix", "የዕቃ አይነቶች")}</span>
@@ -399,27 +426,72 @@ export default function PremiumStorefront() {
 
         <div className="flex-1 min-h-screen">
           {!loading && filteredProducts.length > 0 && <div className="flex justify-between items-center mb-4 md:mb-6"><p className="text-xs md:text-sm font-bold opacity-50 uppercase tracking-widest">{filteredProducts.length} Assets Found</p></div>}
+          
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">{[1,2,3,4,5,6].map(n => <div key={n} className="rounded-3xl h-[22rem] md:h-[26rem] bg-white/5 border border-white/5 animate-pulse p-4 md:p-6" />)}</div>
-          ) : filteredProducts.length === 0 ? (
+          ) : catalogMixedItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 md:py-32 opacity-50 border border-dashed border-white/10 rounded-[1.5rem] md:rounded-[2rem] bg-[#111111]"><PackageSearch size={48} className="mb-4 md:mb-6 opacity-30 md:w-16 md:h-16" /><p className="text-base md:text-xl font-bold">{t("No materials match this configuration.", "ምንም እቃዎች አልተገኙም።")}</p></div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              {filteredProducts.map((item, i) => (
-                <div key={item.id} className="animate-in fade-in zoom-in transform-gpu" style={{ animationDelay: `${(i % 10) * 30}ms` }}>
-                  <StorefrontProductCard item={item} onAddToCart={handleAddToCart} />
-                </div>
-              ))}
+            // GRID-FLOW-ROW-DENSE allows the weird ad shapes to lock in without leaving holes
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 grid-flow-row-dense">
+              {catalogMixedItems.map((item, i) => {
+                if (!item.isAd) {
+                  return (
+                    <div key={item.data.id} className="col-span-1 row-span-1 animate-in fade-in zoom-in transform-gpu" style={{ animationDelay: `${(i % 10) * 30}ms` }}>
+                      <StorefrontProductCard item={item.data} onAddToCart={handleAddToCart} />
+                    </div>
+                  );
+                } else {
+                  // --- THE CRAZY SHAPE VARIANTS ---
+                  let shapeClasses = "";
+                  switch (item.shapeVariant) {
+                    case 0: // Giant Vertical Pillar
+                      shapeClasses = "col-span-1 row-span-2 rounded-[5rem] h-[30rem] lg:h-auto min-h-[400px]";
+                      break;
+                    case 1: // Diagonal Leaf
+                      shapeClasses = "col-span-1 sm:col-span-2 row-span-1 rounded-bl-[4rem] rounded-tr-[4rem] h-[16rem] md:h-[24rem]";
+                      break;
+                    case 2: // Perfect Circle / Oval
+                      shapeClasses = "col-span-1 row-span-1 aspect-square rounded-full scale-95 md:scale-90 hover:scale-100";
+                      break;
+                    case 3: // Ultra-Wide Ribbon
+                      shapeClasses = "col-span-1 sm:col-span-2 lg:col-span-3 h-32 md:h-48 rounded-[2rem]";
+                      break;
+                  }
+
+                  return (
+                    <div key={`ad-${i}`} className={`${shapeClasses} relative overflow-hidden shadow-2xl border border-white/10 group transition-all duration-700 bg-black`}>
+                      <AdMedia asset={item.data} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-black/10 pointer-events-none" />
+                      <div className="absolute top-4 right-4 text-[8px] tracking-[0.3em] font-black uppercase text-white/50 border border-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm">AD</div>
+                    </div>
+                  );
+                }
+              })}
             </div>
           )}
         </div>
       </section>
 
+      {/* --- FOOTER DOME AD --- */}
+      {footerAd && (
+        <div className="w-full relative h-[30vh] md:h-[50vh] overflow-hidden rounded-t-[50%] md:rounded-t-[100%] border-t border-white/10 shadow-[0_-20px_50px_rgba(255,255,255,0.05)] mt-10">
+          <AdMedia asset={footerAd} className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center">
+            <h1 className="text-3xl md:text-5xl font-black text-white/80 tracking-widest">{systemSettings.companyName.split(' ')[0]}<span style={{ color: 'var(--accent)' }}>.</span></h1>
+            <p className="text-[10px] md:text-xs font-mono opacity-50 mt-2">INDUSTRIAL GRADE • DELIVERED</p>
+          </div>
+        </div>
+      )}
+
+      {/* --- FLOATING CONTROLS --- */}
       <div className="fixed bottom-4 md:bottom-6 right-4 md:right-6 z-40 flex flex-col gap-3">
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className={`p-3 rounded-full bg-black/80 backdrop-blur-md border border-white/20 shadow-xl transition-all duration-300 flex items-center justify-center ${scrolled ? 'translate-x-0 opacity-100' : 'translate-x-20 opacity-0 pointer-events-none'}`}><ChevronDown size={20} className="rotate-180" /></button>
         {systemSettings.aiEnabled && <button onClick={() => setIsAiOpen(true)} className="p-3 md:p-4 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-transform hover:scale-110 flex items-center justify-center bg-indigo-600 text-white animate-bounce-slow"><MessageSquare size={24} /></button>}
       </div>
 
+      {/* --- AI CHAT DRAWER --- */}
       <div className={`fixed bottom-4 md:bottom-6 right-4 md:right-24 z-[70] w-[calc(100vw-2rem)] md:w-96 bg-[#0A0A0F] border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col transition-all duration-300 origin-bottom-right ${isAiOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`} style={{ height: '500px', maxHeight: '80vh' }}>
         <div className="p-4 border-b border-indigo-500/30 flex justify-between items-center bg-indigo-900/20 rounded-t-3xl">
           <div className="flex items-center gap-3">
@@ -447,6 +519,7 @@ export default function PremiumStorefront() {
 
       <div className={`fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 md:px-6 md:py-3 rounded-full bg-white text-black font-bold text-xs md:text-sm shadow-2xl flex items-center gap-2 md:gap-3 transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}><CheckCircle2 className="text-emerald-500" size={16} />{toast.msg}</div>
 
+      {/* --- TRACKING DRAWER --- */}
       {isTrackingOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div onClick={() => setIsTrackingOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
@@ -509,8 +582,8 @@ export default function PremiumStorefront() {
                                 {item.selectedColor && <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300">Col: {item.selectedColor}</span>}
                               </div>
                             )}
-                            <div className="flex items-center gap-1 mt-1 bg-black rounded-lg p-0.5 border border-white/10 w-fit">
-                              <input type="number" value={item.quantity} onChange={(e) => updateCartQuantity(item.cartItemId, e.target.value)} onBlur={(e) => handleCartQuantityBlur(item.cartItemId, e.target.value)} className="w-12 bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" style={{ MozAppearance: 'textfield' }} />
+                            <div className="flex items-center gap-1 mt-1 bg-black rounded-lg p-0.5 border border-white/10 w-[60px] md:w-[70px]">
+                              <input type="number" value={item.quantity} onChange={(e) => updateCartQuantity(item.cartItemId, e.target.value)} onBlur={(e) => handleCartQuantityBlur(item.cartItemId, e.target.value)} className="w-full bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" style={{ MozAppearance: 'textfield' }} />
                             </div>
                           </div>
                           <div className="flex flex-col items-end justify-between h-full py-1">
