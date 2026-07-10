@@ -34,6 +34,7 @@ const initialSettingsState = {
   adminPassword: "AmanZone2026"
 };
 
+// MEMORY-SAFE DATE FORMATTER
 const formatDate = (val: any) => {
   if (!val) return "N/A";
   try {
@@ -84,6 +85,7 @@ export default function AdminCommandCenter() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", type: "success" });
+  
   const [showProforma, setShowProforma] = useState(false);
 
   useEffect(() => {
@@ -96,6 +98,7 @@ export default function AdminCommandCenter() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
     const unsubInv = onSnapshot(query(collection(db, "inventory"), orderBy("createdAt", "desc")), (snapshot) => { 
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setLoading(false); 
     });
@@ -108,6 +111,7 @@ export default function AdminCommandCenter() {
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) setSystemSettings({ ...initialSettingsState, ...docSnap.data() });
     });
+
     return () => { unsubInv(); unsubOrders(); unsubMarketing(); unsubSettings(); };
   }, [isAuthenticated]);
 
@@ -136,19 +140,43 @@ export default function AdminCommandCenter() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsAuthenticating(true); setAuthError("");
-    if (authInput === "RESET") { localStorage.clear(); window.location.reload(); return; }
+    setIsAuthenticating(true);
+    setAuthError("");
+
+    if (authInput === "RESET") {
+      localStorage.clear();
+      window.location.reload();
+      return;
+    }
+
     try {
       const settingsSnap = await getDoc(doc(db, "settings", "global"));
       let currentPassword = "AmanZone2026"; 
-      if (settingsSnap.exists()) { const data = settingsSnap.data(); if (data && data.adminPassword) currentPassword = data.adminPassword; }
+
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data();
+        if (data && data.adminPassword) currentPassword = data.adminPassword;
+      }
+
       if (authInput === currentPassword || authInput === "AmanZone2026" || authInput === "12345") {
-        localStorage.setItem("az_admin_session", "active"); setIsAuthenticated(true);
-      } else { setAuthError("Invalid Security Clearance"); setAuthInput(""); }
-    } catch (error) { setAuthError("Network error checking clearance."); } finally { setIsAuthenticating(false); }
+        localStorage.setItem("az_admin_session", "active");
+        setIsAuthenticated(true);
+      } else {
+        setAuthError("Invalid Security Clearance");
+        setAuthInput("");
+      }
+    } catch (error) {
+      setAuthError("Network error checking clearance.");
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
-  const handleLogout = () => { localStorage.removeItem("az_admin_session"); setIsAuthenticated(false); };
+  const handleLogout = () => {
+    localStorage.removeItem("az_admin_session");
+    setIsAuthenticated(false);
+  };
+
   const showToast = (msg: string, type = "success") => { setToast({ show: true, msg, type }); setTimeout(() => setToast({ show: false, msg: "", type: "success" }), 4000); };
   
   const openAddMenu = () => {
@@ -170,7 +198,6 @@ export default function AdminCommandCenter() {
     setIsDrawerOpen(true);
   };
 
-  // UPGRADED CLOUDINARY FUNCTION TO SUPPORT VIDEOS AND IMAGES
   const uploadToCloudinary = async (file: File) => {
     const uploadData = new FormData();
     uploadData.append("file", file);
@@ -183,24 +210,35 @@ export default function AdminCommandCenter() {
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingImage(true);
-    try { const data = await uploadToCloudinary(file); setFormData(prev => ({ ...prev, imageUrl: data.url })); showToast("Asset uploaded."); } 
-    catch { showToast("Upload failed.", "error"); } finally { setIsUploadingImage(false); }
+    try { 
+      const data = await uploadToCloudinary(file);
+      setFormData(prev => ({ ...prev, imageUrl: data.url })); 
+      showToast("Asset uploaded."); 
+    } catch { showToast("Upload failed.", "error"); } finally { setIsUploadingImage(false); }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return; setIsUploadingLogo(true);
-    try { const data = await uploadToCloudinary(file); setSystemSettings((prev: any) => ({ ...prev, logoUrl: data.url })); showToast("Logo uploaded."); } 
-    catch { showToast("Logo upload failed.", "error"); } finally { setIsUploadingLogo(false); }
+    try { 
+      const data = await uploadToCloudinary(file);
+      setSystemSettings((prev: any) => ({ ...prev, logoUrl: data.url })); 
+      showToast("Logo uploaded."); 
+    } catch { showToast("Logo upload failed.", "error"); } finally { setIsUploadingLogo(false); }
   };
 
   const handleMarketingUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]; if (!file) return; setIsUploadingMarketing(true);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsUploadingMarketing(true);
     try {
-      showToast("Uploading media... this may take a moment for videos.");
-      const data = await uploadToCloudinary(file);
-      await addDoc(collection(db, "marketing"), { url: data.url, type: data.type, active: true, createdAt: new Date().toISOString() });
-      showToast("Marketing asset deployed successfully.");
-    } catch { showToast("Marketing upload failed.", "error"); } finally { setIsUploadingMarketing(false); }
+      showToast(`Uploading ${files.length} asset(s)...`);
+      const fileArray = Array.from(files);
+      for (const file of fileArray) {
+        const data = await uploadToCloudinary(file);
+        await addDoc(collection(db, "marketing"), { url: data.url, type: data.type, active: true, createdAt: new Date().toISOString() });
+      }
+      showToast("Marketing assets deployed successfully.");
+    } catch { showToast("Upload failed.", "error"); } finally { setIsUploadingMarketing(false); }
   };
 
   const deleteMarketingAsset = async (id: string) => {
@@ -350,7 +388,6 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- ORDERS TAB --- */}
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8"><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Executive Overview</h2></header>
@@ -374,7 +411,6 @@ export default function AdminCommandCenter() {
                 {orders.length === 0 ? ( <div className="p-10 flex flex-col items-center justify-center opacity-30"><Activity size={48} className="mb-4" /></div> ) : (
                   orders.slice(0, 50).map((order) => (
                     <div key={order.id} className="grid grid-cols-1 lg:grid-cols-6 gap-3 lg:gap-4 p-4 items-center hover:bg-white/5 transition-colors cursor-pointer" onClick={() => openOrderMenu(order)}>
-                      
                       <div className="col-span-1 flex flex-row lg:flex-col justify-between items-start">
                          <div>
                            <p className="text-[11px] text-emerald-400 font-mono mb-0.5">{order.id}</p>
@@ -384,13 +420,11 @@ export default function AdminCommandCenter() {
                            <span className={`px-2 py-1 text-[9px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status || "pending")}`}>{String(order.status || "pending").replace("_", " ")}</span>
                          </div>
                       </div>
-
                       <div className="col-span-1">
                         <p className="font-bold text-sm truncate flex items-center gap-1.5"><User size={12} className="opacity-50 text-emerald-400"/> {order.customerName || "Unnamed Client"}</p>
                         <p className="text-xs opacity-70 mt-0.5 flex items-center gap-1.5"><Phone size={12} className="opacity-50"/> {order.phone || "No Phone Info"}</p>
                         {order.companyName && <p className="text-[10px] text-gray-400 mt-1 truncate font-medium flex items-center gap-1.5"><Briefcase size={10} className="opacity-50 text-indigo-400"/> {order.companyName}</p>}
                       </div>
-
                       <div className="col-span-1 lg:col-span-2">
                         <p className="text-xs font-bold mb-0.5 flex items-center gap-1.5 opacity-90">
                           {order.deliveryType === "Delivery" ? <Truck size={14} className="text-blue-400"/> : <Building2 size={14} className="text-indigo-400"/>} 
@@ -402,19 +436,16 @@ export default function AdminCommandCenter() {
                           <p className="text-[11px] opacity-60 pl-5">Client will collect</p>
                         )}
                       </div>
-
                       <div className="col-span-1 hidden lg:block">
                          <p className="font-black text-sm">{(Number(order.finalAmount) || 0).toLocaleString()} ETB</p>
                          <p className="text-[10px] opacity-50 mt-0.5">{order.requireVat ? 'VAT Included' : 'Standard Pipeline'}</p>
                       </div>
-
                       <div className="col-span-1 hidden lg:flex items-center justify-end gap-3">
                          <span className={`px-2.5 py-1 text-[9px] md:text-[10px] font-bold uppercase tracking-wider border rounded-full ${getStatusColor(order.status || "pending")}`}>
                            {String(order.status || "pending").replace("_", " ")}
                          </span>
                          <ChevronRight size={16} className="opacity-30" />
                       </div>
-                      
                     </div>
                   ))
                 )}
@@ -429,7 +460,7 @@ export default function AdminCommandCenter() {
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
               <div><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Marketing Engine</h2><p className="text-xs md:text-sm opacity-50 font-medium">Upload banners and videos to display on the storefront.</p></div>
               <div className="relative">
-                <input type="file" id="marketingUpload" className="hidden" accept="image/*,video/*" onChange={handleMarketingUpload} />
+                <input type="file" id="marketingUpload" multiple className="hidden" accept="image/*,video/*" onChange={handleMarketingUpload} />
                 <button onClick={() => document.getElementById('marketingUpload')?.click()} disabled={isUploadingMarketing} className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_0_20px_rgba(79,70,229,0.3)]">
                   {isUploadingMarketing ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />} Deploy Media
                 </button>
@@ -520,9 +551,8 @@ export default function AdminCommandCenter() {
       </main>
 
       {/* ========================================================= */}
-      {/* DRAWERS: UNMOUNTED WHEN CLOSED TO SAVE RAM */}
+      {/* DRAWERS */}
       {/* ========================================================= */}
-      
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
@@ -607,7 +637,7 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
 
-                {/* NEW: SIZE AND COLOR FIELDS */}
+                {/* --- SIZE AND COLOR CONFIGURATORS --- */}
                 <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-900/10 space-y-4">
                   <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-indigo-400 border-b border-indigo-500/20 pb-2">Client Options (Optional)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -794,7 +824,6 @@ export default function AdminCommandCenter() {
                             </div>
                             <p className="font-black text-emerald-400 text-sm whitespace-nowrap">{((Number(item.price)||0) * (Number(item.quantity) || 1)).toLocaleString()}</p>
                           </div>
-                          {/* SHOW SELECTED SIZE AND COLOR IN ORDER DETAILS */}
                           {(item.selectedSize || item.selectedColor) && (
                             <div className="mt-2 flex gap-2">
                               {item.selectedSize && <span className="text-[9px] bg-white/10 px-2 py-0.5 rounded text-gray-300">Size: {item.selectedSize}</span>}
@@ -897,6 +926,11 @@ export default function AdminCommandCenter() {
                   )}
                   <div className="flex justify-between border-t-2 border-gray-800 pt-3 text-xl font-black text-gray-900"><span className="uppercase">Total Due</span><span>{(Number(selectedOrder.finalAmount)||0).toLocaleString()} ETB</span></div>
                 </div>
+              </div>
+              <div className="pt-8 border-t border-gray-200 text-xs text-gray-500 leading-relaxed text-center">
+                <p className="font-bold mb-1 text-gray-700">Official Proforma Statement</p>
+                <p>This document is a proforma invoice. Final delivery times and specific material prices are subject to change based on logistics constraints and on-site inspection.</p>
+                <p className="mt-1">Valid for 15 days from the date of issuance.</p>
               </div>
             </div>
           </div>
