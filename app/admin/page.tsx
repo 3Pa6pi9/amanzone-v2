@@ -388,6 +388,7 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
+        {/* --- ORDERS TAB --- */}
         {activeTab === "orders" && (
           <div className="animate-in fade-in duration-300">
             <header className="mb-6 md:mb-8"><h2 className="text-2xl md:text-3xl font-black tracking-tight mb-1">Executive Overview</h2></header>
@@ -551,8 +552,9 @@ export default function AdminCommandCenter() {
       </main>
 
       {/* ========================================================= */}
-      {/* DRAWERS */}
+      {/* DRAWERS: UNMOUNTED WHEN CLOSED TO SAVE RAM */}
       {/* ========================================================= */}
+      
       {isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
@@ -939,4 +941,3 @@ export default function AdminCommandCenter() {
     </div>
   );
 }
-
