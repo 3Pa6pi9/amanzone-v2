@@ -458,6 +458,7 @@ export default function AdminCommandCenter() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <select value={adPlacement} onChange={(e) => setAdPlacement(e.target.value)} className="px-4 py-3 bg-[#111111] border border-indigo-500/30 rounded-xl outline-none focus:border-indigo-500 text-sm font-bold text-indigo-100">
                   <option value="hero">Hero Banner (Top)</option>
+                  <option value="marquee">Sliding Ticker (Slim Horizontal)</option>
                   <option value="inline">Inline Matrix (Mixed in Products)</option>
                   <option value="floating">Floating Orb (Left Side)</option>
                   <option value="footer">Footer Dome (Bottom)</option>
