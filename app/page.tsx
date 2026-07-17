@@ -8,7 +8,7 @@ import {
   ArrowRight, ShoppingCart, PackageSearch, X, Loader2, Trash2, 
   Image as ImageIcon, Search, CheckCircle2, ChevronDown, ChevronRight, 
   MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu, Mail,
-  MessageSquare, Send, Scissors
+  MessageSquare, Send, Scissors, Plus
 } from "lucide-react";
 
 const PREDEFINED_MATRIX: Record<string, string[]> = {
@@ -38,101 +38,6 @@ const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
   );
 };
 
-// =======================================================================
-// DYNAMIC CUSTOM-CUT PRODUCT CARD
-// =======================================================================
-const StorefrontProductCard = ({ item, onAddToCart }: { item: any, onAddToCart: (item: any) => void }) => {
-  const availableColors = item.color ? item.color.split(',').map((c:string) => c.trim()).filter(Boolean) : [];
-  const availableSizes = item.size ? item.size.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
-  
-  const [localQty, setLocalQty] = useState<number | string>(1);
-  const [customLength, setCustomLength] = useState<number | string>(1);
-  
-  const [selectedColor, setSelectedColor] = useState(availableColors[0] || "");
-  const [selectedSize, setSelectedSize] = useState(availableSizes[0] || "");
-
-  const handlePushToCart = () => {
-    const finalQty = typeof localQty === 'number' && localQty >= 1 ? localQty : 1;
-    const finalLength = typeof customLength === 'number' && customLength > 0 ? customLength : 1;
-    
-    onAddToCart({
-      ...item,
-      cartItemId: `${item.id}-${selectedSize}-${selectedColor}-${item.allowCustomSize ? finalLength : 'standard'}`,
-      quantity: finalQty,
-      selectedColor,
-      selectedSize,
-      customLength: item.allowCustomSize ? finalLength : null
-    });
-    setLocalQty(1);
-    if(item.allowCustomSize) setCustomLength(1);
-  };
-
-  const currentMultiplier = item.allowCustomSize && typeof customLength === 'number' && customLength > 0 ? customLength : 1;
-  const currentPrice = (parseFloat(item.price) || 0) * currentMultiplier;
-
-  return (
-    <div className="group rounded-2xl md:rounded-[2rem] p-3 md:p-5 bg-[#111111] border border-white/10 transition-transform duration-300 hover:-translate-y-1 hover:shadow-2xl relative overflow-hidden flex flex-col h-full">
-      {item.imageUrl ? (
-        <div className="overflow-hidden bg-black/40 border border-white/5 relative flex-shrink-0 w-full h-32 md:h-48 mb-3 md:mb-5 rounded-xl md:rounded-2xl">
-          <img src={item.imageUrl} alt={item.title || "Product"} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-        </div>
-      ) : (
-        <div className="overflow-hidden bg-black/40 border border-white/5 flex flex-col items-center justify-center text-white/30 flex-shrink-0 w-full h-32 md:h-48 mb-3 md:mb-5 rounded-xl md:rounded-2xl">
-          <ImageIcon size={24} className="mb-2 md:w-8 md:h-8" />
-        </div>
-      )}
-
-      <div className="flex flex-col flex-1">
-        <div className="flex flex-wrap gap-1 md:gap-2 mb-1.5 md:mb-2">
-          <span className="text-[7px] md:text-[9px] font-bold px-1.5 md:px-2 py-0.5 rounded-full bg-white/10 uppercase tracking-wider truncate max-w-[80px] md:max-w-[100px]">{item.menu || "Material"}</span>
-          {item.metric && <span className="text-[7px] md:text-[9px] font-bold px-1.5 md:px-2 py-0.5 rounded-full bg-black/50 border border-white/10 uppercase tracking-wider text-gray-400">{item.metric}</span>}
-        </div>
-        <h4 className="font-bold group-hover:text-white transition-colors truncate text-sm md:text-xl mb-0.5 md:mb-1">{item.title}</h4>
-        <p className="opacity-50 truncate text-[9px] md:text-xs mb-3">{item.submenu || ''} {item.type || ''}</p>
-        
-        {/* CUSTOM LENGTH ENGINE */}
-        {item.allowCustomSize && (
-          <div className="mb-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-2 flex items-center justify-between">
-            <span className="text-[9px] md:text-[10px] text-yellow-400 font-bold uppercase tracking-widest flex items-center gap-1"><Scissors size={10}/> {item.customSizeLabel || "Length (m)"}</span>
-            <input type="number" min="0.1" step="0.1" value={customLength} onChange={(e) => setCustomLength(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-16 md:w-20 bg-black border border-white/10 rounded px-2 py-1 text-xs text-center outline-none focus:border-yellow-500 text-yellow-400 font-bold" />
-          </div>
-        )}
-
-        {(availableColors.length > 0 || availableSizes.length > 0) && (
-          <div className="flex flex-col xl:flex-row gap-2 mb-4 mt-auto">
-            {availableColors.length > 0 && (
-              <select value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)} className="flex-1 bg-black border border-white/10 rounded-lg px-2 py-1.5 text-[9px] md:text-xs outline-none">
-                {availableColors.map((c: string) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            )}
-            {availableSizes.length > 0 && (
-              <select value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} className="flex-1 bg-black border border-white/10 rounded-lg px-2 py-1.5 text-[9px] md:text-xs outline-none">
-                {availableSizes.map((s: string) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            )}
-          </div>
-        )}
-
-        <div className="mt-auto flex justify-between items-end pt-3 md:pt-4 border-t border-white/10">
-          <div className="flex flex-col truncate pr-1">
-            <span className="font-black text-emerald-400 leading-none truncate text-base md:text-2xl">{currentPrice.toLocaleString()}</span>
-            <span className="text-[7px] md:text-[10px] opacity-50 uppercase tracking-widest mt-1 truncate">ETB / {item.allowCustomSize ? 'Unit' : item.metric}</span>
-          </div>
-          
-          <div className="flex items-center gap-1 md:gap-2">
-            <div className="flex items-center bg-black border border-white/10 rounded-lg p-0.5 h-full w-[40px] md:w-[60px]">
-              <input type="number" value={localQty} onChange={(e) => setLocalQty(e.target.value === "" ? "" : parseInt(e.target.value))} onBlur={handleQtyBlur} className="w-full bg-transparent text-[10px] md:text-xs font-bold text-center outline-none" style={{ MozAppearance: 'textfield' }} />
-            </div>
-            <button onClick={handlePushToCart} className="rounded-lg bg-emerald-500 text-black hover:bg-emerald-400 transition-transform active:scale-95 shadow-lg p-1.5 md:p-2.5">
-              <ShoppingCart size={14} className="md:w-4 md:h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export default function PremiumStorefront() {
   const { theme, setTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -153,6 +58,13 @@ export default function PremiumStorefront() {
   const [checkoutStep, setCheckoutStep] = useState<1 | 2>(1);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   
+  // Quick Configurator State
+  const [quickAddProduct, setQuickAddProduct] = useState<any>(null);
+  const [qaQty, setQaQty] = useState<number | string>(1);
+  const [qaLength, setQaLength] = useState<number | string>(1);
+  const [qaColor, setQaColor] = useState("");
+  const [qaSize, setQaSize] = useState("");
+
   const [deliveryType, setDeliveryType] = useState<"Warehouse Pickup" | "Delivery">("Delivery");
   const [formData, setFormData] = useState({ name: "", phone: "", region: "Addis Ababa", subCity: "", address: "", companyName: "", tinNumber: "", requireVat: false });
 
@@ -214,7 +126,31 @@ export default function PremiumStorefront() {
     });
   }, [products, searchQuery, activeFilters]);
 
-  const handleAddToCart = (configuredProduct: any) => {
+  // Handle Quick Add Modal Opening
+  const openQuickAdd = (item: any) => {
+    const availableColors = item.color ? item.color.split(',').map((c:string) => c.trim()).filter(Boolean) : [];
+    const availableSizes = item.size ? item.size.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
+    setQaColor(availableColors[0] || "");
+    setQaSize(availableSizes[0] || "");
+    setQaQty(1);
+    setQaLength(1);
+    setQuickAddProduct(item);
+  };
+
+  const executeQuickAdd = () => {
+    if (!quickAddProduct) return;
+    const finalQty = typeof qaQty === 'number' && qaQty >= 1 ? qaQty : 1;
+    const finalLength = typeof qaLength === 'number' && qaLength > 0 ? qaLength : 1;
+
+    const configuredProduct = {
+      ...quickAddProduct,
+      cartItemId: `${quickAddProduct.id}-${qaSize}-${qaColor}-${quickAddProduct.allowCustomSize ? finalLength : 'standard'}`,
+      quantity: finalQty,
+      selectedColor: qaColor,
+      selectedSize: qaSize,
+      customLength: quickAddProduct.allowCustomSize ? finalLength : null
+    };
+
     setCartItems(prev => {
       const existing = prev.find(item => item.cartItemId === configuredProduct.cartItemId);
       if (existing) {
@@ -223,8 +159,10 @@ export default function PremiumStorefront() {
       }
       return [...prev, configuredProduct];
     });
+
     setToast({ show: true, msg: `${configuredProduct.title} added to pipeline` });
     setTimeout(() => setToast({ show: false, msg: "" }), 3000);
+    setQuickAddProduct(null);
   };
 
   const removeFromCart = (cartItemId: string) => setCartItems(prev => prev.filter(item => item.cartItemId !== cartItemId));
@@ -240,7 +178,6 @@ export default function PremiumStorefront() {
     if (isNaN(parsed) || parsed < 1) updateCartQuantity(cartItemId, 1);
   };
   
-  // Adjusted subtotal calculation to include the custom length multiplier
   const cartSubtotal = cartItems.reduce((total, item) => {
     const basePrice = parseFloat(item.price) || 0;
     const qty = parseInt(item.quantity) || 1;
@@ -264,15 +201,11 @@ export default function PremiumStorefront() {
         status: "pending_payment", createdAt: new Date().toISOString()
       };
       
-      // TEMPORARY BYPASS: Since Chapa is failing, route directly to Firebase to test the system end-to-end.
       await addDoc(collection(db, "orders"), payload);
       
-      setCartItems([]);
-      setIsCartOpen(false);
-      setCheckoutStep(1);
+      setCartItems([]); setIsCartOpen(false); setCheckoutStep(1);
       setToast({ show: true, msg: "Order Dispatched to Command Center successfully!" });
       setTimeout(() => setToast({ show: false, msg: "" }), 4000);
-      
     } catch (error) { alert("System error during checkout pipeline."); } finally { setIsCheckingOut(false); }
   };
 
@@ -307,7 +240,6 @@ export default function PremiumStorefront() {
     );
   };
 
-  // --- SPECIFIC AD DISTRIBUTION LOGIC ---
   const activeAds = marketingAssets.filter(ad => ad.active);
   const heroAds = activeAds.filter(ad => ad.placement === 'hero');
   const floatingAds = activeAds.filter(ad => ad.placement === 'floating');
@@ -318,17 +250,15 @@ export default function PremiumStorefront() {
   const floatingAd = floatingAds.length > 0 ? floatingAds[0] : null;
   const footerAd = footerAds.length > 0 ? footerAds[0] : null;
 
-  // Weave INLINE ads into the product catalog
+  // Weave INLINE ads into the Jiji-style grid
   const catalogMixedItems: any[] = [];
   let inlineAdCount = 0;
   
   filteredProducts.forEach((product, i) => {
     catalogMixedItems.push({ isAd: false, data: product });
-    
-    // Inject an ad every 6 items (more spacious for dense grids)
     if ((i + 1) % 6 === 0 && inlineAds.length > 0) {
       const ad = inlineAds[inlineAdCount % inlineAds.length];
-      catalogMixedItems.push({ isAd: true, data: ad, shapeVariant: inlineAdCount % 4 });
+      catalogMixedItems.push({ isAd: true, data: ad });
       inlineAdCount++;
     }
   });
@@ -356,15 +286,11 @@ export default function PremiumStorefront() {
             <button onClick={() => setLanguage(language === "EN" ? "AM" : "EN")} className="px-3 py-1.5 md:px-4 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs font-bold hover:bg-white/10 transition-colors">
               {language === "EN" ? "አማርኛ" : "EN"}
             </button>
-            <button onClick={() => setIsCartOpen(true)} className="relative p-2 hover:scale-110 transition-transform">
-              <ShoppingCart size={20} className="md:w-6 md:h-6" />
-              {cartCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 text-white text-[9px] md:text-[10px] font-bold flex items-center justify-center rounded-full shadow-lg border border-black animate-in zoom-in" style={{ backgroundColor: 'var(--accent)' }}>{cartCount}</span>}
-            </button>
           </div>
         </div>
       </header>
 
-      {/* --- FLOATING ORB AD (Z-INDEXED) --- */}
+      {/* --- FLOATING ORB AD --- */}
       {floatingAd && (
         <div className="hidden lg:block fixed top-1/3 left-6 z-30 pointer-events-auto group">
           <div className="relative w-24 h-24 rounded-[40%_60%_70%_30%/40%_50%_60%_50%] border-4 border-indigo-500/20 shadow-[0_0_40px_rgba(79,70,229,0.3)] overflow-hidden transition-all duration-700 hover:w-64 hover:h-64 hover:rounded-[2rem] hover:border-emerald-500 hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] cursor-pointer bg-black z-30">
@@ -375,10 +301,6 @@ export default function PremiumStorefront() {
       )}
 
       <main className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-6 pt-28 md:pt-40 pb-6 flex flex-col items-center text-center">
-        <div className="inline-flex items-center gap-2 md:gap-3 px-4 py-2 md:px-5 md:py-2.5 rounded-full bg-white/5 border border-white/10 mb-6 md:mb-8">
-          <span className="relative flex h-2 w-2 md:h-2.5 md:w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 md:h-2.5 md:w-2.5 bg-emerald-500"></span></span>
-          <span className="text-[10px] md:text-xs font-semibold tracking-widest text-gray-300 uppercase">{t("Live Sync Active", "ቀጥታ ስርጭት ክፍት ነው")}</span>
-        </div>
         <h2 className="text-4xl sm:text-5xl md:text-8xl font-black tracking-tighter mb-4 md:mb-6 leading-[1.1]">{renderSlogan()}</h2>
         
         {/* --- HERO PANORAMIC AD --- */}
@@ -386,7 +308,6 @@ export default function PremiumStorefront() {
           <div className="w-full mt-6 md:mt-10 mb-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 max-w-4xl mx-auto">
             <div className="relative w-full h-24 md:h-32 lg:h-48 rounded-[3rem] md:rounded-[5rem] border border-white/10 shadow-[0_20px_50px_-12px_rgba(16,185,129,0.2)] overflow-hidden group">
               <AdMedia asset={heroAd} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent pointer-events-none" />
               <div className="absolute left-6 md:left-10 top-1/2 -translate-y-1/2 font-black text-white/50 tracking-[0.5em] uppercase text-[8px] md:text-xs rotate-[-90deg] origin-left">Sponsored</div>
             </div>
           </div>
@@ -404,31 +325,30 @@ export default function PremiumStorefront() {
       <section id="catalog" className="relative z-10 max-w-[1400px] mx-auto px-2 md:px-6 pb-40 flex flex-col md:flex-row gap-4 md:gap-8">
         <div className="md:hidden w-full sticky top-[72px] z-30 px-2">
           <button onClick={() => setIsMobileMatrixOpen(!isMobileMatrixOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-[#111111] border border-white/10 rounded-xl font-bold shadow-2xl">
-            <span className="flex items-center gap-2"><Menu size={18} className="text-emerald-400" /> {t("Material Matrix", "የዕቃ አይነቶች")}</span>
+            <span className="flex items-center gap-2"><Menu size={18} className="text-emerald-400" /> {t("Material Categories", "የዕቃ አይነቶች")}</span>
             <ChevronDown size={18} className={`transition-transform duration-300 ${isMobileMatrixOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
-        <aside className={`w-full md:w-72 flex-shrink-0 flex-col gap-2 relative px-2 md:px-0 ${isMobileMatrixOpen ? 'flex' : 'hidden md:flex'}`}>
-          <div className="sticky top-[100px] bg-[#111111] border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 shadow-2xl overflow-hidden transform-gpu">
-            <h3 className="font-black text-sm md:text-lg mb-4 md:mb-6 uppercase tracking-widest border-b border-white/10 pb-3 md:pb-4 hidden md:block">{t("Material Matrix", "የዕቃ አይነቶች")}</h3>
-            <button onClick={() => { setActiveFilters({ menu: "All", submenu: "All", type: "All" }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs md:text-sm font-bold transition-colors mb-2 ${activeFilters.menu === "All" ? 'bg-white text-black' : 'hover:bg-white/10'}`}>{t("View All Pipeline", "ሁሉንም እይ")}</button>
-            <div className="space-y-1 max-h-[50vh] md:max-h-[60vh] overflow-y-auto scrollbar-hide pr-2">
+        <aside className={`w-full md:w-64 flex-shrink-0 flex-col gap-2 relative px-2 md:px-0 ${isMobileMatrixOpen ? 'flex' : 'hidden md:flex'}`}>
+          <div className="sticky top-[100px] bg-[#111111] border border-white/10 rounded-[1.5rem] p-4 shadow-2xl overflow-hidden transform-gpu">
+            <button onClick={() => { setActiveFilters({ menu: "All", submenu: "All", type: "All" }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-colors mb-2 ${activeFilters.menu === "All" ? 'bg-white text-black' : 'hover:bg-white/10'}`}>{t("All Materials", "ሁሉንም እይ")}</button>
+            <div className="space-y-1 max-h-[60vh] overflow-y-auto scrollbar-hide pr-2">
               {Object.keys(catalogTree).map(menu => (
                 <div key={menu} className="flex flex-col">
-                  <button onClick={() => { toggleMenu(menu); setActiveFilters({ menu, submenu: "All", type: "All" }); }} className={`flex items-center justify-between w-full text-left px-3 md:px-4 py-3 rounded-xl text-xs md:text-sm font-bold transition-colors ${activeFilters.menu === menu && activeFilters.submenu === "All" ? 'bg-white/20' : 'hover:bg-white/5'}`} style={{ color: activeFilters.menu === menu ? 'var(--accent)' : '' }}>
+                  <button onClick={() => { toggleMenu(menu); setActiveFilters({ menu, submenu: "All", type: "All" }); }} className={`flex items-center justify-between w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${activeFilters.menu === menu && activeFilters.submenu === "All" ? 'bg-white/20' : 'hover:bg-white/5'}`} style={{ color: activeFilters.menu === menu ? 'var(--accent)' : '' }}>
                     <span className="truncate pr-2">{menu}</span>{expandedMenus[menu] ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
                   </button>
                   {expandedMenus[menu] && (
-                    <div className="ml-2 md:ml-4 mt-1 border-l border-white/10 flex flex-col gap-1 pl-2">
+                    <div className="ml-2 mt-1 border-l border-white/10 flex flex-col gap-1 pl-2">
                       {Object.keys(catalogTree[menu]).map(submenu => (
                         <div key={submenu}>
-                          <button onClick={() => { setActiveFilters({ menu, submenu, type: "All" }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-3 py-2 rounded-lg text-[11px] md:text-xs font-semibold transition-colors ${activeFilters.submenu === submenu && activeFilters.type === "All" ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>{submenu}</button>
+                          <button onClick={() => { setActiveFilters({ menu, submenu, type: "All" }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-3 py-2 rounded-md text-[11px] font-semibold transition-colors ${activeFilters.submenu === submenu && activeFilters.type === "All" ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>{submenu}</button>
                           {activeFilters.submenu === submenu && (
-                            <div className="ml-2 md:ml-3 mt-1 flex flex-col gap-1">
+                            <div className="ml-2 mt-1 flex flex-col gap-1">
                               {Array.from(catalogTree[menu][submenu] as Set<string>).map(type => (
                                 type !== "Standard" && type !== "" && (
-                                  <button key={type as string} onClick={() => { setActiveFilters({ menu, submenu, type: type as string }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] uppercase tracking-wider font-bold transition-colors ${activeFilters.type === type ? 'text-emerald-400' : 'text-gray-500 hover:text-white'}`}>• {type as string}</button>
+                                  <button key={type as string} onClick={() => { setActiveFilters({ menu, submenu, type: type as string }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-2 py-1.5 rounded-md text-[9px] uppercase tracking-wider font-bold transition-colors ${activeFilters.type === type ? 'text-emerald-400' : 'text-gray-500 hover:text-white'}`}>• {type as string}</button>
                                 )
                               ))}
                             </div>
@@ -444,41 +364,40 @@ export default function PremiumStorefront() {
         </aside>
 
         <div className="flex-1 min-h-screen px-2 md:px-0">
-          {!loading && filteredProducts.length > 0 && <div className="flex justify-between items-center mb-4 md:mb-6"><p className="text-xs md:text-sm font-bold opacity-50 uppercase tracking-widest">{filteredProducts.length} Assets Found</p></div>}
+          {!loading && filteredProducts.length > 0 && <div className="flex justify-between items-center mb-4"><p className="text-[10px] md:text-xs font-bold opacity-50 uppercase tracking-widest">{filteredProducts.length} Results Found</p></div>}
           
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4">{[1,2,3,4,5,6].map(n => <div key={n} className="rounded-2xl h-[16rem] md:h-[22rem] bg-white/5 border border-white/5 animate-pulse p-4" />)}</div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">{[1,2,3,4,5,6,7,8].map(n => <div key={n} className="rounded-xl h-[14rem] md:h-[18rem] bg-white/5 border border-white/5 animate-pulse p-4" />)}</div>
           ) : catalogMixedItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 md:py-32 opacity-50 border border-dashed border-white/10 rounded-[1.5rem] md:rounded-[2rem] bg-[#111111]"><PackageSearch size={48} className="mb-4 md:mb-6 opacity-30 md:w-16 md:h-16" /><p className="text-base md:text-xl font-bold">{t("No materials match this configuration.", "ምንም እቃዎች አልተገኙም።")}</p></div>
+            <div className="flex flex-col items-center justify-center py-20 opacity-50 border border-dashed border-white/10 rounded-2xl bg-[#111111]"><PackageSearch size={48} className="mb-4 opacity-30" /><p className="text-sm md:text-base font-bold">No materials match this configuration.</p></div>
           ) : (
-            // FORCED MULTI-COLUMN DENSE GRID (2 columns mobile, 3-4 desktop)
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4 grid-flow-row-dense">
+            // --- JIJI-STYLE DENSE GRID (2 columns mobile, up to 5 desktop) ---
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3 grid-flow-row-dense">
               {catalogMixedItems.map((item, i) => {
                 if (!item.isAd) {
+                  const product = item.data;
                   return (
-                    <div key={item.data.id} className="col-span-1 row-span-1 animate-in fade-in zoom-in transform-gpu" style={{ animationDelay: `${(i % 10) * 30}ms` }}>
-                      <StorefrontProductCard item={item.data} onAddToCart={handleAddToCart} />
+                    <div key={product.id} onClick={() => openQuickAdd(product)} className="col-span-1 bg-[#111111] border border-white/10 rounded-[1rem] overflow-hidden flex flex-col hover:border-emerald-500/50 hover:shadow-[0_10px_30px_rgba(16,185,129,0.1)] transition-all cursor-pointer group animate-in fade-in zoom-in" style={{ animationDelay: `${(i % 10) * 20}ms` }}>
+                      <div className="relative aspect-square bg-black/50 overflow-hidden">
+                         {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/> : <div className="w-full h-full flex items-center justify-center opacity-20"><ImageIcon size={24}/></div>}
+                         {product.allowCustomSize && <span className="absolute top-2 left-2 bg-yellow-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg">CUSTOM</span>}
+                      </div>
+                      <div className="p-3 flex flex-col flex-1">
+                         <p className="font-black text-emerald-400 text-sm md:text-base leading-none mb-1">{(parseFloat(product.price) || 0).toLocaleString()} <span className="text-[8px] text-white/50 font-medium">ETB</span></p>
+                         <p className="text-xs font-medium text-white/90 line-clamp-2 leading-snug">{product.title}</p>
+                         <div className="mt-auto pt-3 flex justify-between items-end">
+                           <p className="text-[8px] md:text-[9px] text-white/40 uppercase tracking-wider truncate pr-2">{product.menu}</p>
+                           <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/50 group-hover:bg-emerald-500 group-hover:text-black group-hover:border-emerald-500 transition-colors"><Plus size={14}/></div>
+                         </div>
+                      </div>
                     </div>
                   );
                 } else {
-                  // --- THE CRAZY SHAPE VARIANTS ---
-                  let shapeClasses = "";
-                  switch (item.shapeVariant) {
-                    case 0: // Tall Pillar
-                      shapeClasses = "col-span-1 row-span-2 rounded-[3rem] min-h-[350px] md:min-h-[450px]"; break;
-                    case 1: // Wide Banner
-                      shapeClasses = "col-span-2 row-span-1 rounded-bl-[3rem] rounded-tr-[3rem] min-h-[180px] md:min-h-[220px]"; break;
-                    case 2: // Perfect Circle
-                      shapeClasses = "col-span-1 row-span-1 aspect-square rounded-full scale-95 hover:scale-100"; break;
-                    case 3: // Big Feature Square
-                      shapeClasses = "col-span-2 row-span-2 rounded-[2rem] min-h-[350px] md:min-h-[450px]"; break;
-                  }
-
+                  // Ads flow smoothly within the grid
                   return (
-                    <div key={`ad-${i}`} className={`${shapeClasses} relative overflow-hidden shadow-2xl border border-white/10 group transition-all duration-700 bg-black`}>
-                      <AdMedia asset={item.data} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-110" />
-                      <div className="absolute inset-0 bg-black/10 pointer-events-none" />
-                      <div className="absolute top-3 right-3 text-[7px] md:text-[8px] tracking-[0.3em] font-black uppercase text-white/50 border border-white/20 px-2 py-0.5 rounded-full backdrop-blur-sm">AD</div>
+                    <div key={`ad-${i}`} className="col-span-2 row-span-1 md:row-span-2 rounded-[1rem] overflow-hidden shadow-2xl border border-indigo-500/20 group transition-all duration-700 bg-black min-h-[150px]">
+                      <AdMedia asset={item.data} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-105" />
+                      <div className="absolute top-2 right-2 text-[7px] tracking-[0.2em] font-black uppercase text-white/50 border border-white/20 px-1.5 py-0.5 rounded backdrop-blur-sm">AD</div>
                     </div>
                   );
                 }
@@ -490,94 +409,87 @@ export default function PremiumStorefront() {
 
       {/* --- FOOTER DOME AD --- */}
       {footerAd && (
-        <div className="w-full relative h-[30vh] md:h-[50vh] overflow-hidden rounded-t-[50%] md:rounded-t-[100%] border-t border-white/10 shadow-[0_-20px_50px_rgba(255,255,255,0.05)] mt-10">
+        <div className="w-full relative h-[30vh] md:h-[40vh] overflow-hidden rounded-t-[50%] border-t border-white/10 shadow-[0_-20px_50px_rgba(255,255,255,0.05)] mt-10">
           <AdMedia asset={footerAd} className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent pointer-events-none" />
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center">
-            <h1 className="text-3xl md:text-5xl font-black text-white/80 tracking-widest">{systemSettings.companyName.split(' ')[0]}<span style={{ color: 'var(--accent)' }}>.</span></h1>
-            <p className="text-[10px] md:text-xs font-mono opacity-50 mt-2">INDUSTRIAL GRADE • DELIVERED</p>
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center">
+            <h1 className="text-2xl md:text-4xl font-black text-white/80 tracking-widest">{systemSettings.companyName.split(' ')[0]}<span style={{ color: 'var(--accent)' }}>.</span></h1>
+            <p className="text-[9px] md:text-[10px] font-mono opacity-50 mt-1">INDUSTRIAL GRADE</p>
           </div>
         </div>
       )}
 
-      {/* --- PERSISTENT FLOATING CART BANNER --- */}
-      {cartItems.length > 0 && !isCartOpen && (
-        <div className="fixed bottom-0 left-0 w-full z-40 p-4 md:p-6 animate-in slide-in-from-bottom-20 duration-500 pointer-events-none">
-          <div className="max-w-[1400px] mx-auto flex justify-center md:justify-end">
-             <button onClick={() => setIsCartOpen(true)} className="pointer-events-auto w-full md:w-auto bg-emerald-500 text-black px-6 py-4 rounded-2xl md:rounded-[2rem] font-black shadow-[0_10px_40px_rgba(16,185,129,0.3)] flex items-center justify-between gap-6 hover:bg-emerald-400 transition-transform active:scale-95 border-2 border-emerald-400">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-black/10 rounded-full flex items-center justify-center"><ShoppingCart size={16}/></div>
-                  <div className="text-left"><p className="text-[10px] uppercase tracking-widest opacity-80 leading-none mb-1">Pipeline Active</p><p className="text-sm md:text-base leading-none">{cartCount} {cartCount === 1 ? 'Item' : 'Items'} • {cartTotal.toLocaleString()} ETB</p></div>
-                </div>
-                <div className="flex items-center gap-2 text-xs uppercase tracking-widest opacity-80">View <ChevronRight size={16}/></div>
-             </button>
-          </div>
-        </div>
-      )}
-
-      {/* --- FLOATING CONTROLS (Moved up slightly to avoid cart banner) --- */}
-      <div className={`fixed right-4 md:right-6 z-40 flex flex-col gap-3 transition-all duration-300 ${cartItems.length > 0 && !isCartOpen ? 'bottom-24 md:bottom-28' : 'bottom-4 md:bottom-6'}`}>
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className={`p-3 rounded-full bg-black/80 backdrop-blur-md border border-white/20 shadow-xl transition-all duration-300 flex items-center justify-center ${scrolled ? 'translate-x-0 opacity-100' : 'translate-x-20 opacity-0 pointer-events-none'}`}><ChevronDown size={20} className="rotate-180" /></button>
-        {systemSettings.aiEnabled && <button onClick={() => setIsAiOpen(true)} className="p-3 md:p-4 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-transform hover:scale-110 flex items-center justify-center bg-indigo-600 text-white animate-bounce-slow"><MessageSquare size={24} /></button>}
-      </div>
-
-      {/* --- AI CHAT DRAWER --- */}
-      <div className={`fixed bottom-4 md:bottom-6 right-4 md:right-24 z-[70] w-[calc(100vw-2rem)] md:w-96 bg-[#0A0A0F] border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col transition-all duration-300 origin-bottom-right ${isAiOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`} style={{ height: '500px', maxHeight: '80vh' }}>
-        <div className="p-4 border-b border-indigo-500/30 flex justify-between items-center bg-indigo-900/20 rounded-t-3xl">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center shadow-lg"><Activity size={16} /></div>
-            <div><h3 className="font-black text-sm text-indigo-100">AmanZone AI</h3><p className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online</p></div>
-          </div>
-          <button onClick={() => setIsAiOpen(false)} className="p-2 text-indigo-300 hover:text-white transition-colors"><X size={18} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide bg-black/40">
-          {aiHistory.map((msg, idx) => (
-            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white/10 text-gray-200 border border-white/5 rounded-bl-sm'}`}>{msg.text}</div>
+      {/* --- QUICK ADD CONFIGURATOR (ON-THE-GO BOTTOM SHEET) --- */}
+      {quickAddProduct && (
+        <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setQuickAddProduct(null)} />
+          <div className="relative w-full md:w-[400px] bg-[#0A0A0F] border border-white/10 md:rounded-3xl rounded-t-3xl shadow-2xl p-5 md:p-6 animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300">
+            <button onClick={() => setQuickAddProduct(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10"><X size={16}/></button>
+            
+            <div className="flex gap-4 mb-6">
+               <div className="w-20 h-20 rounded-xl bg-black border border-white/10 overflow-hidden flex-shrink-0">
+                 {quickAddProduct.imageUrl ? <img src={quickAddProduct.imageUrl} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center opacity-30"><ImageIcon/></div>}
+               </div>
+               <div className="flex-1 pr-6">
+                 <h3 className="font-bold text-sm md:text-base leading-tight mb-1">{quickAddProduct.title}</h3>
+                 <p className="text-emerald-400 font-black text-lg">{(parseFloat(quickAddProduct.price)||0).toLocaleString()} <span className="text-[10px] text-white/50 font-medium">ETB / {quickAddProduct.metric}</span></p>
+               </div>
             </div>
-          ))}
-          {isAiTyping && (
-            <div className="flex justify-start"><div className="bg-white/10 p-3 rounded-2xl rounded-bl-sm border border-white/5 flex items-center gap-1"><span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span><span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span><span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span></div></div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-        <form onSubmit={handleAiSubmit} className="p-3 border-t border-white/10 bg-[#0A0A0F] rounded-b-3xl flex gap-2">
-          <input type="text" placeholder="Ask about materials or stock..." value={aiMessage} onChange={(e) => setAiMessage(e.target.value)} className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 outline-none focus:border-indigo-500 text-sm" />
-          <button disabled={isAiTyping} type="submit" className="p-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"><Send size={18} /></button>
-        </form>
-      </div>
 
-      <div className={`fixed bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 md:px-6 md:py-3 rounded-full bg-white text-black font-bold text-xs md:text-sm shadow-2xl flex items-center gap-2 md:gap-3 transition-all duration-300 ${toast.show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}><CheckCircle2 className="text-emerald-500" size={16} />{toast.msg}</div>
+            <div className="space-y-4">
+              {quickAddProduct.allowCustomSize && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-center justify-between">
+                  <span className="text-xs text-yellow-400 font-bold uppercase tracking-widest flex items-center gap-2"><Scissors size={14}/> {quickAddProduct.customSizeLabel || "Length (m)"}</span>
+                  <input type="number" min="0.1" step="0.1" value={qaLength} onChange={(e) => setQaLength(e.target.value === "" ? "" : parseFloat(e.target.value))} className="w-24 bg-black border border-white/10 rounded-lg px-3 py-2 text-sm text-center outline-none focus:border-yellow-500 text-yellow-400 font-bold" style={{ MozAppearance: 'textfield' }} />
+                </div>
+              )}
 
-      {/* --- TRACKING DRAWER --- */}
-      {isTrackingOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div onClick={() => setIsTrackingOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg bg-[#0A0A0F] border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-6 md:p-8 shadow-2xl animate-in zoom-in-95 duration-300">
-            <button onClick={() => setIsTrackingOpen(false)} className="absolute top-4 right-4 md:top-6 md:right-6 opacity-50 hover:opacity-100"><X /></button>
-            <h2 className="text-xl md:text-2xl font-black mb-2 flex items-center gap-2 md:gap-3"><Activity className="text-emerald-400" /> Pipeline Tracker</h2>
-            <form onSubmit={trackOrder} className="flex flex-col sm:flex-row gap-2 mb-6">
-              <input type="text" placeholder="e.g. AZ-12345678-999" required value={trackingId} onChange={(e) => setTrackingId(e.target.value)} className="flex-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10 outline-none focus:border-white/30 font-mono text-base" />
-              <button disabled={trackingLoading} type="submit" className="px-6 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-200 transition-colors flex items-center justify-center sm:w-32">{trackingLoading ? <Loader2 className="animate-spin" size={18} /> : "Scan"}</button>
-            </form>
-            {trackingStatus && (
-              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
-                {!trackingStatus.found ? (
-                  <p className="text-red-400 text-sm font-bold flex items-center gap-2"><X size={16} /> {trackingStatus.error}</p>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center border-b border-white/10 pb-3">
-                      <span className="text-xs uppercase tracking-widest opacity-50">Status</span><span className="px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-[10px] md:text-xs font-black uppercase tracking-wider border border-indigo-500/20">{(trackingStatus.status || "pending").replace("_", " ")}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-xs md:text-sm">
-                      <div><p className="opacity-50 text-[10px] md:text-xs">Client</p><p className="font-bold truncate">{trackingStatus.customerName}</p></div>
-                      <div><p className="opacity-50 text-[10px] md:text-xs">Total Value</p><p className="font-bold text-emerald-400">{(trackingStatus.totalAmount || 0).toLocaleString()} ETB</p></div>
-                    </div>
+              <div className="grid grid-cols-2 gap-3">
+                {quickAddProduct.color && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Color</label>
+                    <select value={qaColor} onChange={(e) => setQaColor(e.target.value)} className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
+                      {quickAddProduct.color.split(',').map((c:string) => c.trim()).filter(Boolean).map((c:string) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                )}
+                {quickAddProduct.size && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Size</label>
+                    <select value={qaSize} onChange={(e) => setQaSize(e.target.value)} className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
+                      {quickAddProduct.size.split(',').map((s:string) => s.trim()).filter(Boolean).map((s:string) => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 )}
               </div>
-            )}
+
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Total Quantity</label>
+                <div className="flex items-center bg-[#111111] border border-white/10 rounded-xl p-1">
+                   <button onClick={() => setQaQty(prev => Math.max(1, (typeof prev==='number'?prev:1) - 1))} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-black/50 rounded-lg">-</button>
+                   <input type="number" value={qaQty} onChange={(e) => setQaQty(e.target.value === "" ? "" : parseInt(e.target.value))} onBlur={() => {if(qaQty==="" || (typeof qaQty==='number'&&qaQty<1) || isNaN(Number(qaQty))) setQaQty(1)}} className="flex-1 bg-transparent text-center font-black text-lg outline-none" style={{ MozAppearance: 'textfield' }} />
+                   <button onClick={() => setQaQty(prev => (typeof prev==='number'?prev:1) + 1)} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-black/50 rounded-lg">+</button>
+                </div>
+              </div>
+              
+              <div className="pt-2">
+                <button onClick={executeQuickAdd} className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-widest text-sm shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95">Add to Pipeline</button>
+              </div>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* --- PERSISTENT FLOATING CART PILL --- */}
+      {cartItems.length > 0 && !isCartOpen && !quickAddProduct && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-500">
+           <button onClick={() => setIsCartOpen(true)} className="bg-emerald-500 text-black px-6 py-3.5 rounded-full font-black shadow-[0_10px_40px_rgba(16,185,129,0.4)] flex items-center gap-4 hover:bg-emerald-400 transition-transform active:scale-95 border-2 border-emerald-400 whitespace-nowrap">
+              <div className="relative">
+                <ShoppingCart size={20}/>
+                <span className="absolute -top-2 -right-2 bg-black text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full">{cartCount}</span>
+              </div>
+              <span className="text-sm border-l border-black/20 pl-4">{cartTotal.toLocaleString()} ETB</span>
+           </button>
         </div>
       )}
 
