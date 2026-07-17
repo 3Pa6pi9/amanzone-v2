@@ -49,8 +49,6 @@ export default function PremiumStorefront() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
-  const [isMobileMatrixOpen, setIsMobileMatrixOpen] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [activeFilters, setActiveFilters] = useState({ menu: "All", submenu: "All", type: "All" });
 
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -104,29 +102,16 @@ export default function PremiumStorefront() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiHistory, isAiTyping]);
 
-  const catalogTree = useMemo(() => {
-    const tree: any = {};
-    Object.keys(PREDEFINED_MATRIX).forEach(menu => { tree[menu] = {}; PREDEFINED_MATRIX[menu].forEach(submenu => { tree[menu][submenu] = new Set(); }); });
-    products.forEach(p => {
-      const m = p.menu || "Uncategorized"; const sm = p.submenu || "General"; const tType = p.type || "Standard";
-      if (!tree[m]) tree[m] = {}; if (!tree[m][sm]) tree[m][sm] = new Set(); tree[m][sm].add(tType);
-    });
-    return tree;
-  }, [products]);
-
-  const toggleMenu = (menu: string) => setExpandedMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
+  const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const searchMatch = (p.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || (p.menu || "").toLowerCase().includes(searchQuery.toLowerCase());
       const menuMatch = activeFilters.menu === "All" || p.menu === activeFilters.menu;
-      const submenuMatch = activeFilters.submenu === "All" || p.submenu === activeFilters.submenu;
-      const typeMatch = activeFilters.type === "All" || p.type === activeFilters.type;
-      return searchMatch && menuMatch && submenuMatch && typeMatch;
+      return searchMatch && menuMatch;
     });
   }, [products, searchQuery, activeFilters]);
 
-  // Handle Quick Add Modal Opening
   const openQuickAdd = (item: any) => {
     const availableColors = item.color ? item.color.split(',').map((c:string) => c.trim()).filter(Boolean) : [];
     const availableSizes = item.size ? item.size.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
@@ -232,25 +217,17 @@ export default function PremiumStorefront() {
     } catch (error) { setAiHistory(prev => [...prev, {role: 'ai', text: "Neural link disrupted. Please try again."}]); } finally { setIsAiTyping(false); }
   };
 
-  const renderSlogan = () => {
-    const parts = systemSettings.slogan.split('.');
-    if (parts.length < 2) return <>{systemSettings.slogan}</>;
-    return (
-      <>{parts[0]}. <br /><span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(to right, var(--text-main), var(--accent))' }}>{parts.slice(1).join('.').trim()}</span></>
-    );
-  };
-
   const activeAds = marketingAssets.filter(ad => ad.active);
   const heroAds = activeAds.filter(ad => ad.placement === 'hero');
   const floatingAds = activeAds.filter(ad => ad.placement === 'floating');
   const footerAds = activeAds.filter(ad => ad.placement === 'footer');
   const inlineAds = activeAds.filter(ad => ad.placement === 'inline' || !ad.placement);
+  const marqueeAds = activeAds.filter(ad => ad.placement === 'marquee');
 
   const heroAd = heroAds.length > 0 ? heroAds[0] : null;
   const floatingAd = floatingAds.length > 0 ? floatingAds[0] : null;
   const footerAd = footerAds.length > 0 ? footerAds[0] : null;
 
-  // Weave INLINE ads into the Jiji-style grid
   const catalogMixedItems: any[] = [];
   let inlineAdCount = 0;
   
@@ -265,151 +242,147 @@ export default function PremiumStorefront() {
 
   return (
     <div className="relative min-h-screen font-sans scroll-smooth overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-main)' }}>
+      {/* INFINITE MARQUEE CSS INJECTION */}
+      <style jsx global>{`
+        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
+        .animate-marquee { animation: marquee 25s linear infinite; }
+        .animate-marquee:hover { animation-play-state: paused; }
+      `}</style>
+
       <div className="fixed top-[-20%] left-[-10%] w-[50rem] h-[50rem] pointer-events-none transform-gpu" style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 60%)', opacity: 0.12 }} />
       <div className="fixed bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] pointer-events-none transform-gpu opacity-10" style={{ background: 'radial-gradient(circle, #059669 0%, transparent 60%)' }} />
 
-      <header className={`fixed top-0 w-full z-40 transition-colors duration-300 border-b transform-gpu ${scrolled ? 'bg-black/80 py-3 border-white/10 shadow-2xl backdrop-blur-md' : 'bg-transparent py-3 md:py-5 border-transparent'}`}>
-        <div className="max-w-[1400px] mx-auto px-4 md:px-6 flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
-            <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center font-black text-white shadow-[0_0_20px_rgba(255,255,255,0.1)] text-xs md:text-base overflow-hidden" style={{ backgroundColor: 'var(--accent)' }}>
-              {systemSettings.logoUrl ? <img src={systemSettings.logoUrl} className="w-full h-full object-cover" alt="Logo" /> : "AZ"}
+      {/* --- JIJI-STYLE HEADER --- */}
+      <header className={`fixed top-0 w-full z-40 transition-colors duration-300 border-b transform-gpu ${scrolled ? 'bg-black/90 py-2 md:py-3 border-white/10 shadow-2xl backdrop-blur-md' : 'bg-[#0A0A0F]/90 py-3 md:py-5 border-white/5 backdrop-blur-sm'}`}>
+        <div className="max-w-[1400px] mx-auto px-4 md:px-6 flex flex-col md:flex-row md:items-center gap-3 md:gap-0 justify-between">
+          <div className="flex items-center justify-between w-full md:w-auto">
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo(0,0)}>
+              <div className="w-8 h-8 rounded flex items-center justify-center font-black text-white text-xs overflow-hidden" style={{ backgroundColor: 'var(--accent)' }}>
+                {systemSettings.logoUrl ? <img src={systemSettings.logoUrl} className="w-full h-full object-cover" alt="Logo" /> : "AZ"}
+              </div>
+              <h1 className="text-xl md:text-2xl font-black tracking-tighter truncate max-w-[150px] md:max-w-none">
+                {systemSettings.companyName.split(' ')[0]}<span style={{ color: 'var(--accent)' }}>.</span>
+              </h1>
             </div>
-            <h1 className="text-xl md:text-2xl font-black tracking-tighter truncate max-w-[150px] md:max-w-none">
-              {systemSettings.companyName.split(' ')[0]}<span style={{ color: 'var(--accent)' }}>.</span>
-            </h1>
+            
+            <div className="flex items-center gap-3 md:hidden">
+              <div className="flex items-center gap-1 text-[10px] text-gray-400 bg-white/5 px-2 py-1 rounded border border-white/10"><MapPin size={10} className="text-emerald-400"/> Addis Ababa</div>
+            </div>
           </div>
           
-          <div className="flex items-center gap-2 md:gap-6">
-            <button onClick={() => setIsTrackingOpen(true)} className="flex items-center gap-2 px-3 py-1.5 md:px-4 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs font-bold hover:bg-white/10 transition-colors">
-              <Activity size={14} className="text-emerald-400" /> <span className="hidden sm:inline">{t("Track Order", "ትዕዛዝ ተከታተል")}</span>
-            </button>
-            <button onClick={() => setLanguage(language === "EN" ? "AM" : "EN")} className="px-3 py-1.5 md:px-4 rounded-full bg-white/5 border border-white/10 text-[10px] md:text-xs font-bold hover:bg-white/10 transition-colors">
-              {language === "EN" ? "አማርኛ" : "EN"}
-            </button>
+          <div className="relative w-full md:w-[400px] lg:w-[500px] mx-auto md:mx-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} />
+            <input 
+              type="text" placeholder={t("Search materials...", "ፈልግ...")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 md:py-3 rounded-lg bg-black border border-white/10 outline-none focus:border-emerald-500 transition-colors text-sm"
+            />
+          </div>
+
+          <div className="hidden md:flex items-center gap-4">
+            <div className="flex items-center gap-1 text-[11px] text-gray-400 bg-white/5 px-3 py-1.5 rounded border border-white/10"><MapPin size={12} className="text-emerald-400"/> Addis Ababa</div>
+            <button onClick={() => setIsTrackingOpen(true)} className="text-xs font-bold hover:text-emerald-400 transition-colors">{t("Track Order", "ትዕዛዝ ተከታተል")}</button>
+            <button onClick={() => setLanguage(language === "EN" ? "AM" : "EN")} className="text-xs font-bold hover:text-emerald-400 transition-colors px-2 border-l border-white/10">{language === "EN" ? "አማርኛ" : "EN"}</button>
           </div>
         </div>
+
+        {/* --- HORIZONTAL CATEGORY PILLS (JIJI STYLE) --- */}
+        <div className="max-w-[1400px] mx-auto px-4 md:px-6 mt-3 md:mt-4">
+           <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide snap-x">
+             <button onClick={() => setActiveFilters({menu: 'All', submenu: 'All', type: 'All'})} className={`snap-start flex-shrink-0 px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors whitespace-nowrap border ${activeFilters.menu === 'All' ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-[#111111] text-gray-300 border-white/10 hover:bg-white/10'}`}>All Materials</button>
+             {uniqueMenus.map((menu:any) => (
+               <button key={menu} onClick={() => setActiveFilters({menu, submenu: 'All', type: 'All'})} className={`snap-start flex-shrink-0 px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors whitespace-nowrap border ${activeFilters.menu === menu ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-[#111111] text-gray-300 border-white/10 hover:bg-white/10'}`}>{menu}</button>
+             ))}
+           </div>
+        </div>
       </header>
+
+      <div className="pt-32 md:pt-40"></div>
 
       {/* --- FLOATING ORB AD --- */}
       {floatingAd && (
         <div className="hidden lg:block fixed top-1/3 left-6 z-30 pointer-events-auto group">
-          <div className="relative w-24 h-24 rounded-[40%_60%_70%_30%/40%_50%_60%_50%] border-4 border-indigo-500/20 shadow-[0_0_40px_rgba(79,70,229,0.3)] overflow-hidden transition-all duration-700 hover:w-64 hover:h-64 hover:rounded-[2rem] hover:border-emerald-500 hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] cursor-pointer bg-black z-30">
+          <div className="relative w-20 h-20 rounded-[40%_60%_70%_30%/40%_50%_60%_50%] border-4 border-indigo-500/20 shadow-[0_0_40px_rgba(79,70,229,0.3)] overflow-hidden transition-all duration-700 hover:w-64 hover:h-64 hover:rounded-[2rem] hover:border-emerald-500 hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] cursor-pointer bg-black">
              <AdMedia asset={floatingAd} className="w-full h-full object-cover scale-150 group-hover:scale-100 transition-transform duration-700" />
              <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors duration-500" />
           </div>
         </div>
       )}
 
-      <main className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-6 pt-28 md:pt-40 pb-6 flex flex-col items-center text-center">
-        <h2 className="text-4xl sm:text-5xl md:text-8xl font-black tracking-tighter mb-4 md:mb-6 leading-[1.1]">{renderSlogan()}</h2>
+      {/* --- HERO PANORAMIC AD --- */}
+      {heroAd && (
+        <div className="w-full max-w-[1400px] mx-auto px-4 md:px-6 mb-6">
+          <div className="relative w-full h-24 md:h-32 lg:h-40 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden group bg-[#111111]">
+            <AdMedia asset={heroAd} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 font-black text-white/50 tracking-[0.5em] uppercase text-[8px] md:text-xs rotate-[-90deg] origin-left">PROMO</div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MARQUEE SLIDING TICKER AD --- */}
+      {marqueeAds.length > 0 && (
+        <div className="w-full bg-emerald-500/5 border-y border-emerald-500/20 py-2 md:py-3 overflow-hidden flex relative mb-6">
+          <div className="absolute left-0 top-0 bottom-0 w-12 md:w-32 bg-gradient-to-r from-[#050505] to-transparent z-10 pointer-events-none" />
+          <div className="absolute right-0 top-0 bottom-0 w-12 md:w-32 bg-gradient-to-l from-[#050505] to-transparent z-10 pointer-events-none" />
+          <div className="animate-marquee flex gap-4 md:gap-8 items-center min-w-max px-4">
+            {/* Duplicate array heavily to ensure it spans ultra-wide screens seamlessly */}
+            {[...marqueeAds, ...marqueeAds, ...marqueeAds, ...marqueeAds, ...marqueeAds].map((ad, i) => (
+              <div key={i} className="flex items-center gap-3 bg-[#111111] pr-4 rounded-full border border-white/5 shadow-lg overflow-hidden h-8 md:h-10">
+                <AdMedia asset={ad} className="h-full w-20 md:w-24 object-cover" />
+                <span className="text-emerald-400 font-bold tracking-widest text-[8px] md:text-[10px] uppercase whitespace-nowrap">Special Offer</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <section id="catalog" className="relative z-10 max-w-[1400px] mx-auto px-3 md:px-6 pb-40">
+        {!loading && filteredProducts.length > 0 && <div className="flex justify-between items-center mb-4"><p className="text-[10px] md:text-xs font-bold opacity-50 uppercase tracking-widest px-1">{filteredProducts.length} Results Found</p></div>}
         
-        {/* --- HERO PANORAMIC AD --- */}
-        {heroAd && (
-          <div className="w-full mt-6 md:mt-10 mb-4 animate-in fade-in slide-in-from-bottom-10 duration-1000 max-w-4xl mx-auto">
-            <div className="relative w-full h-24 md:h-32 lg:h-48 rounded-[3rem] md:rounded-[5rem] border border-white/10 shadow-[0_20px_50px_-12px_rgba(16,185,129,0.2)] overflow-hidden group">
-              <AdMedia asset={heroAd} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" />
-              <div className="absolute left-6 md:left-10 top-1/2 -translate-y-1/2 font-black text-white/50 tracking-[0.5em] uppercase text-[8px] md:text-xs rotate-[-90deg] origin-left">Sponsored</div>
-            </div>
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">{[1,2,3,4,5,6,7,8,9,10].map(n => <div key={n} className="rounded-xl h-[16rem] md:h-[18rem] bg-[#111111] border border-white/5 animate-pulse" />)}</div>
+        ) : catalogMixedItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 opacity-50 border border-dashed border-white/10 rounded-2xl bg-[#111111]"><PackageSearch size={48} className="mb-4 opacity-30" /><p className="text-sm md:text-base font-bold">No materials match this configuration.</p></div>
+        ) : (
+          // --- JIJI-STYLE ULTRA DENSE GRID ---
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 grid-flow-row-dense">
+            {catalogMixedItems.map((item, i) => {
+              if (!item.isAd) {
+                const product = item.data;
+                return (
+                  <div key={product.id} onClick={() => openQuickAdd(product)} className="col-span-1 bg-[#0A0A0F] border border-white/10 rounded-xl overflow-hidden flex flex-col hover:border-emerald-500/50 hover:shadow-[0_5px_15px_rgba(16,185,129,0.1)] transition-all cursor-pointer group animate-in fade-in zoom-in" style={{ animationDelay: `${(i % 10) * 10}ms` }}>
+                    <div className="relative aspect-[4/3] bg-black/80 overflow-hidden">
+                       {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/> : <div className="w-full h-full flex items-center justify-center opacity-20"><ImageIcon size={24}/></div>}
+                       {product.allowCustomSize && <span className="absolute top-2 left-2 bg-yellow-500/90 backdrop-blur-sm text-black text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg flex items-center gap-1"><Scissors size={8}/> CUT</span>}
+                    </div>
+                    <div className="p-3 flex flex-col flex-1 bg-[#111111]">
+                       <p className="font-black text-emerald-400 text-sm md:text-base leading-none mb-1">{(parseFloat(product.price) || 0).toLocaleString()} <span className="text-[8px] text-white/50 font-medium">ETB</span></p>
+                       <p className="text-[11px] md:text-xs font-medium text-white/90 line-clamp-2 leading-snug mb-2">{product.title}</p>
+                       <div className="mt-auto pt-2 border-t border-white/5 flex justify-between items-center">
+                         <p className="text-[8px] text-gray-500 uppercase flex items-center gap-1 truncate"><MapPin size={8}/> {product.warehouse || "Addis Ababa"}</p>
+                         <div className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-black transition-colors"><Plus size={14}/></div>
+                       </div>
+                    </div>
+                  </div>
+                );
+              } else {
+                // Ads flow smoothly within the grid
+                return (
+                  <div key={`ad-${i}`} className="col-span-2 row-span-1 rounded-xl overflow-hidden shadow-2xl border border-indigo-500/20 group transition-all duration-700 bg-black min-h-[120px]">
+                    <AdMedia asset={item.data} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-105" />
+                    <div className="absolute top-2 right-2 text-[7px] tracking-[0.2em] font-black uppercase text-white/50 border border-white/20 px-1.5 py-0.5 rounded backdrop-blur-sm">AD</div>
+                  </div>
+                );
+              }
+            })}
           </div>
         )}
-
-        <div className="relative w-full max-w-xl mt-4 md:mt-8">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 opacity-50" size={18} />
-          <input 
-            type="text" placeholder={t("Search materials...", "ፈልግ...")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-6 py-3 md:py-4 rounded-2xl bg-black/40 border border-white/10 outline-none focus:border-white/30 transition-colors shadow-2xl text-base md:text-lg"
-          />
-        </div>
-      </main>
-
-      <section id="catalog" className="relative z-10 max-w-[1400px] mx-auto px-2 md:px-6 pb-40 flex flex-col md:flex-row gap-4 md:gap-8">
-        <div className="md:hidden w-full sticky top-[72px] z-30 px-2">
-          <button onClick={() => setIsMobileMatrixOpen(!isMobileMatrixOpen)} className="w-full flex items-center justify-between px-4 py-3 bg-[#111111] border border-white/10 rounded-xl font-bold shadow-2xl">
-            <span className="flex items-center gap-2"><Menu size={18} className="text-emerald-400" /> {t("Material Categories", "የዕቃ አይነቶች")}</span>
-            <ChevronDown size={18} className={`transition-transform duration-300 ${isMobileMatrixOpen ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
-        <aside className={`w-full md:w-64 flex-shrink-0 flex-col gap-2 relative px-2 md:px-0 ${isMobileMatrixOpen ? 'flex' : 'hidden md:flex'}`}>
-          <div className="sticky top-[100px] bg-[#111111] border border-white/10 rounded-[1.5rem] p-4 shadow-2xl overflow-hidden transform-gpu">
-            <button onClick={() => { setActiveFilters({ menu: "All", submenu: "All", type: "All" }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-colors mb-2 ${activeFilters.menu === "All" ? 'bg-white text-black' : 'hover:bg-white/10'}`}>{t("All Materials", "ሁሉንም እይ")}</button>
-            <div className="space-y-1 max-h-[60vh] overflow-y-auto scrollbar-hide pr-2">
-              {Object.keys(catalogTree).map(menu => (
-                <div key={menu} className="flex flex-col">
-                  <button onClick={() => { toggleMenu(menu); setActiveFilters({ menu, submenu: "All", type: "All" }); }} className={`flex items-center justify-between w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-colors ${activeFilters.menu === menu && activeFilters.submenu === "All" ? 'bg-white/20' : 'hover:bg-white/5'}`} style={{ color: activeFilters.menu === menu ? 'var(--accent)' : '' }}>
-                    <span className="truncate pr-2">{menu}</span>{expandedMenus[menu] ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
-                  </button>
-                  {expandedMenus[menu] && (
-                    <div className="ml-2 mt-1 border-l border-white/10 flex flex-col gap-1 pl-2">
-                      {Object.keys(catalogTree[menu]).map(submenu => (
-                        <div key={submenu}>
-                          <button onClick={() => { setActiveFilters({ menu, submenu, type: "All" }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-3 py-2 rounded-md text-[11px] font-semibold transition-colors ${activeFilters.submenu === submenu && activeFilters.type === "All" ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>{submenu}</button>
-                          {activeFilters.submenu === submenu && (
-                            <div className="ml-2 mt-1 flex flex-col gap-1">
-                              {Array.from(catalogTree[menu][submenu] as Set<string>).map(type => (
-                                type !== "Standard" && type !== "" && (
-                                  <button key={type as string} onClick={() => { setActiveFilters({ menu, submenu, type: type as string }); setIsMobileMatrixOpen(false); }} className={`w-full text-left px-2 py-1.5 rounded-md text-[9px] uppercase tracking-wider font-bold transition-colors ${activeFilters.type === type ? 'text-emerald-400' : 'text-gray-500 hover:text-white'}`}>• {type as string}</button>
-                                )
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        <div className="flex-1 min-h-screen px-2 md:px-0">
-          {!loading && filteredProducts.length > 0 && <div className="flex justify-between items-center mb-4"><p className="text-[10px] md:text-xs font-bold opacity-50 uppercase tracking-widest">{filteredProducts.length} Results Found</p></div>}
-          
-          {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-4">{[1,2,3,4,5,6,7,8].map(n => <div key={n} className="rounded-xl h-[14rem] md:h-[18rem] bg-white/5 border border-white/5 animate-pulse p-4" />)}</div>
-          ) : catalogMixedItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 opacity-50 border border-dashed border-white/10 rounded-2xl bg-[#111111]"><PackageSearch size={48} className="mb-4 opacity-30" /><p className="text-sm md:text-base font-bold">No materials match this configuration.</p></div>
-          ) : (
-            // --- JIJI-STYLE DENSE GRID (2 columns mobile, up to 5 desktop) ---
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3 grid-flow-row-dense">
-              {catalogMixedItems.map((item, i) => {
-                if (!item.isAd) {
-                  const product = item.data;
-                  return (
-                    <div key={product.id} onClick={() => openQuickAdd(product)} className="col-span-1 bg-[#111111] border border-white/10 rounded-[1rem] overflow-hidden flex flex-col hover:border-emerald-500/50 hover:shadow-[0_10px_30px_rgba(16,185,129,0.1)] transition-all cursor-pointer group animate-in fade-in zoom-in" style={{ animationDelay: `${(i % 10) * 20}ms` }}>
-                      <div className="relative aspect-square bg-black/50 overflow-hidden">
-                         {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/> : <div className="w-full h-full flex items-center justify-center opacity-20"><ImageIcon size={24}/></div>}
-                         {product.allowCustomSize && <span className="absolute top-2 left-2 bg-yellow-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg">CUSTOM</span>}
-                      </div>
-                      <div className="p-3 flex flex-col flex-1">
-                         <p className="font-black text-emerald-400 text-sm md:text-base leading-none mb-1">{(parseFloat(product.price) || 0).toLocaleString()} <span className="text-[8px] text-white/50 font-medium">ETB</span></p>
-                         <p className="text-xs font-medium text-white/90 line-clamp-2 leading-snug">{product.title}</p>
-                         <div className="mt-auto pt-3 flex justify-between items-end">
-                           <p className="text-[8px] md:text-[9px] text-white/40 uppercase tracking-wider truncate pr-2">{product.menu}</p>
-                           <div className="w-6 h-6 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/50 group-hover:bg-emerald-500 group-hover:text-black group-hover:border-emerald-500 transition-colors"><Plus size={14}/></div>
-                         </div>
-                      </div>
-                    </div>
-                  );
-                } else {
-                  // Ads flow smoothly within the grid
-                  return (
-                    <div key={`ad-${i}`} className="col-span-2 row-span-1 md:row-span-2 rounded-[1rem] overflow-hidden shadow-2xl border border-indigo-500/20 group transition-all duration-700 bg-black min-h-[150px]">
-                      <AdMedia asset={item.data} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-105" />
-                      <div className="absolute top-2 right-2 text-[7px] tracking-[0.2em] font-black uppercase text-white/50 border border-white/20 px-1.5 py-0.5 rounded backdrop-blur-sm">AD</div>
-                    </div>
-                  );
-                }
-              })}
-            </div>
-          )}
-        </div>
       </section>
 
       {/* --- FOOTER DOME AD --- */}
       {footerAd && (
-        <div className="w-full relative h-[30vh] md:h-[40vh] overflow-hidden rounded-t-[50%] border-t border-white/10 shadow-[0_-20px_50px_rgba(255,255,255,0.05)] mt-10">
+        <div className="w-full relative h-[25vh] md:h-[35vh] overflow-hidden rounded-t-[50%] border-t border-white/10 shadow-[0_-20px_50px_rgba(255,255,255,0.05)] mt-10">
           <AdMedia asset={footerAd} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center">
@@ -422,8 +395,8 @@ export default function PremiumStorefront() {
       {/* --- QUICK ADD CONFIGURATOR (ON-THE-GO BOTTOM SHEET) --- */}
       {quickAddProduct && (
         <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setQuickAddProduct(null)} />
-          <div className="relative w-full md:w-[400px] bg-[#0A0A0F] border border-white/10 md:rounded-3xl rounded-t-3xl shadow-2xl p-5 md:p-6 animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setQuickAddProduct(null)} />
+          <div className="relative w-full md:w-[400px] bg-[#111111] border border-white/10 md:rounded-3xl rounded-t-3xl shadow-2xl p-5 md:p-6 animate-in slide-in-from-bottom-full md:zoom-in-95 duration-300">
             <button onClick={() => setQuickAddProduct(null)} className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10"><X size={16}/></button>
             
             <div className="flex gap-4 mb-6">
@@ -448,7 +421,7 @@ export default function PremiumStorefront() {
                 {quickAddProduct.color && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Color</label>
-                    <select value={qaColor} onChange={(e) => setQaColor(e.target.value)} className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
+                    <select value={qaColor} onChange={(e) => setQaColor(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
                       {quickAddProduct.color.split(',').map((c:string) => c.trim()).filter(Boolean).map((c:string) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
@@ -456,7 +429,7 @@ export default function PremiumStorefront() {
                 {quickAddProduct.size && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Size</label>
-                    <select value={qaSize} onChange={(e) => setQaSize(e.target.value)} className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
+                    <select value={qaSize} onChange={(e) => setQaSize(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
                       {quickAddProduct.size.split(',').map((s:string) => s.trim()).filter(Boolean).map((s:string) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
@@ -465,10 +438,10 @@ export default function PremiumStorefront() {
 
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Total Quantity</label>
-                <div className="flex items-center bg-[#111111] border border-white/10 rounded-xl p-1">
-                   <button onClick={() => setQaQty(prev => Math.max(1, (typeof prev==='number'?prev:1) - 1))} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-black/50 rounded-lg">-</button>
+                <div className="flex items-center bg-black border border-white/10 rounded-xl p-1">
+                   <button onClick={() => setQaQty(prev => Math.max(1, (typeof prev==='number'?prev:1) - 1))} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-white/5 rounded-lg">-</button>
                    <input type="number" value={qaQty} onChange={(e) => setQaQty(e.target.value === "" ? "" : parseInt(e.target.value))} onBlur={() => {if(qaQty==="" || (typeof qaQty==='number'&&qaQty<1) || isNaN(Number(qaQty))) setQaQty(1)}} className="flex-1 bg-transparent text-center font-black text-lg outline-none" style={{ MozAppearance: 'textfield' }} />
-                   <button onClick={() => setQaQty(prev => (typeof prev==='number'?prev:1) + 1)} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-black/50 rounded-lg">+</button>
+                   <button onClick={() => setQaQty(prev => (typeof prev==='number'?prev:1) + 1)} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-white/5 rounded-lg">+</button>
                 </div>
               </div>
               
@@ -480,15 +453,17 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- PERSISTENT FLOATING CART PILL --- */}
+      {/* --- NON-BLOCKING FLOATING SMART CART PILL --- */}
+      {/* Notice pointer-events-none on the container so user can click the grid behind it */}
       {cartItems.length > 0 && !isCartOpen && !quickAddProduct && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-500">
-           <button onClick={() => setIsCartOpen(true)} className="bg-emerald-500 text-black px-6 py-3.5 rounded-full font-black shadow-[0_10px_40px_rgba(16,185,129,0.4)] flex items-center gap-4 hover:bg-emerald-400 transition-transform active:scale-95 border-2 border-emerald-400 whitespace-nowrap">
+        <div className="fixed bottom-6 w-full pointer-events-none z-50 flex justify-center px-4 animate-in slide-in-from-bottom-10 fade-in duration-500">
+           <button onClick={() => setIsCartOpen(true)} className="pointer-events-auto bg-emerald-500/90 backdrop-blur-md text-black px-6 py-3 rounded-full font-black shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center gap-4 hover:bg-emerald-400 transition-transform active:scale-95 border border-emerald-400 whitespace-nowrap">
               <div className="relative">
-                <ShoppingCart size={20}/>
-                <span className="absolute -top-2 -right-2 bg-black text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full">{cartCount}</span>
+                <ShoppingCart size={18}/>
+                <span className="absolute -top-2 -right-2 bg-black text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full border border-emerald-500">{cartCount}</span>
               </div>
               <span className="text-sm border-l border-black/20 pl-4">{cartTotal.toLocaleString()} ETB</span>
+              <ChevronRight size={16} className="opacity-50 -ml-2"/>
            </button>
         </div>
       )}
@@ -556,17 +531,17 @@ export default function PremiumStorefront() {
                 <div className="space-y-6 md:space-y-8 animate-in slide-in-from-right-4 pb-4">
                   <div className="space-y-3 md:space-y-4">
                     <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Billing Identity</h3>
-                    <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="text" required placeholder="Authorized Representative Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" /></div>
-                    <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="tel" required placeholder="Active Phone Number (e.g. 0911...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" /></div>
-                    <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-black/30 space-y-3 md:space-y-4">
+                    <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="text" required placeholder="Authorized Representative Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" /></div>
+                    <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="tel" required placeholder="Active Phone Number (e.g. 0911...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm" /></div>
+                    <div className="p-3 md:p-4 rounded-xl border border-white/10 bg-[#111111] space-y-3 md:space-y-4">
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={formData.requireVat} onChange={e => setFormData({...formData, requireVat: e.target.checked})} className="w-4 h-4 md:w-5 md:h-5 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500 bg-white/10" />
                         <span className="text-xs md:text-sm font-bold">Require Corporate Invoice (+{systemSettings.taxRate}% VAT)</span>
                       </label>
                       {formData.requireVat && (
                         <div className="space-y-3 pt-2 animate-in fade-in zoom-in-95">
-                          <div className="relative"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="text" required placeholder="Registered Company Name" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" /></div>
-                          <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="text" required placeholder="TIN Number (10 Digits)" value={formData.tinNumber} onChange={e => setFormData({...formData, tinNumber: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-mono tracking-widest" /></div>
+                          <div className="relative"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="text" required placeholder="Registered Company Name" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm" /></div>
+                          <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 opacity-50" size={16} /><input type="text" required placeholder="TIN Number (10 Digits)" value={formData.tinNumber} onChange={e => setFormData({...formData, tinNumber: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-emerald-500 text-base md:text-sm font-mono tracking-widest" /></div>
                         </div>
                       )}
                     </div>
@@ -575,8 +550,8 @@ export default function PremiumStorefront() {
                   <div className="space-y-3 md:space-y-4">
                     <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest opacity-50 border-b border-white/10 pb-2">Deployment Strategy</h3>
                     <div className="grid grid-cols-2 gap-2 md:gap-3">
-                      <button type="button" onClick={() => setDeliveryType("Delivery")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Delivery" ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}><Truck size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Site Delivery</span></button>
-                      <button type="button" onClick={() => setDeliveryType("Warehouse Pickup")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Warehouse Pickup" ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}><Building2 size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Self Pickup</span></button>
+                      <button type="button" onClick={() => setDeliveryType("Delivery")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Delivery" ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400' : 'border-white/10 bg-[#111111] hover:bg-white/10'}`}><Truck size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Site Delivery</span></button>
+                      <button type="button" onClick={() => setDeliveryType("Warehouse Pickup")} className={`flex flex-col items-center justify-center gap-1 md:gap-2 p-3 md:p-4 rounded-xl border transition-colors ${deliveryType === "Warehouse Pickup" ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' : 'border-white/10 bg-[#111111] hover:bg-white/10'}`}><Building2 size={18} className="md:w-5 md:h-5" /> <span className="text-[10px] md:text-xs font-bold">Self Pickup</span></button>
                     </div>
                   </div>
 
@@ -590,7 +565,7 @@ export default function PremiumStorefront() {
                           <select required value={formData.subCity} onChange={e => setFormData({...formData, subCity: e.target.value})} className="w-full pl-10 pr-4 py-3 bg-black border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm appearance-none"><option value="" disabled>Select Sub-City</option>{addisSubcities.map(sc => <option key={sc} value={sc}>{sc}</option>)}</select>
                         </div>
                       )}
-                      <textarea required placeholder="Specific site directions / Google Maps Link" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full p-3 md:p-4 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm resize-none"></textarea>
+                      <textarea required placeholder="Specific site directions / Google Maps Link" rows={3} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full p-3 md:p-4 bg-[#111111] border border-white/10 rounded-xl outline-none focus:border-indigo-500 text-base md:text-sm resize-none"></textarea>
                       <p className="text-[9px] md:text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center mt-2 flex items-center justify-center gap-1 md:gap-2"><Truck size={10} className="md:w-3 md:h-3"/> Base delivery starts at {systemSettings.deliveryBaseFee} ETB.</p>
                     </div>
                   )}
@@ -617,10 +592,6 @@ export default function PremiumStorefront() {
           )}
         </div>
       </div>
-
-      <style jsx global>{`
-        input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-      `}</style>
     </div>
   );
 }
