@@ -68,7 +68,6 @@ export default function AdminCommandCenter() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   
-  // Marketing Specific
   const [isUploadingMarketing, setIsUploadingMarketing] = useState(false);
   const [adPlacement, setAdPlacement] = useState('inline');
 
@@ -101,18 +100,28 @@ export default function AdminCommandCenter() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    // FIREBASE ERROR BOUNDARY
+    const handleDbError = (err: any) => {
+      console.error("Firebase Auth/Rules Error:", err);
+      setToast({ show: true, msg: "Database connection blocked. Update Firebase Rules.", type: "error" });
+      setLoading(false);
+    };
+
     const unsubInv = onSnapshot(query(collection(db, "inventory"), orderBy("createdAt", "desc")), (snapshot) => { 
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); setLoading(false); 
-    });
+    }, handleDbError);
+    
     const unsubOrders = onSnapshot(query(collection(db, "orders"), orderBy("createdAt", "desc")), (snapshot) => { 
       setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); 
-    });
+    }, handleDbError);
+    
     const unsubMarketing = onSnapshot(query(collection(db, "marketing"), orderBy("createdAt", "desc")), (snapshot) => { 
       setMarketingAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); 
-    });
+    }, handleDbError);
+    
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) setSystemSettings({ ...initialSettingsState, ...docSnap.data() });
-    });
+    }, handleDbError);
 
     return () => { unsubInv(); unsubOrders(); unsubMarketing(); unsubSettings(); };
   }, [isAuthenticated]);
@@ -223,7 +232,6 @@ export default function AdminCommandCenter() {
       const fileArray = Array.from(files);
       for (const file of fileArray) {
         const data = await uploadToCloudinary(file);
-        // Save the specific placement
         await addDoc(collection(db, "marketing"), { url: data.url, type: data.type, placement: adPlacement, active: true, createdAt: new Date().toISOString() });
       }
       showToast("Marketing assets deployed successfully.");
