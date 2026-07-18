@@ -360,6 +360,7 @@ export default function AdminCommandCenter() {
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full">
         
+        {/* --- INVENTORY TAB --- */}
         {activeTab === "inventory" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -466,7 +467,7 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- UPGRADED MARKETING & ADS TAB --- */}
+        {/* --- MARKETING & ADS TAB --- */}
         {activeTab === "marketing" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
