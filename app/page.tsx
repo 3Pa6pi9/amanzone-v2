@@ -49,6 +49,8 @@ export default function PremiumStorefront() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
+  const [isMobileMatrixOpen, setIsMobileMatrixOpen] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({});
   const [activeFilters, setActiveFilters] = useState({ menu: "All", submenu: "All", type: "All" });
 
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -102,16 +104,29 @@ export default function PremiumStorefront() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiHistory, isAiTyping]);
 
-  const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
+  const catalogTree = useMemo(() => {
+    const tree: any = {};
+    Object.keys(PREDEFINED_MATRIX).forEach(menu => { tree[menu] = {}; PREDEFINED_MATRIX[menu].forEach(submenu => { tree[menu][submenu] = new Set(); }); });
+    products.forEach(p => {
+      const m = p.menu || "Uncategorized"; const sm = p.submenu || "General"; const tType = p.type || "Standard";
+      if (!tree[m]) tree[m] = {}; if (!tree[m][sm]) tree[m][sm] = new Set(); tree[m][sm].add(tType);
+    });
+    return tree;
+  }, [products]);
+
+  const toggleMenu = (menu: string) => setExpandedMenus(prev => ({ ...prev, [menu]: !prev[menu] }));
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const searchMatch = (p.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || (p.menu || "").toLowerCase().includes(searchQuery.toLowerCase());
       const menuMatch = activeFilters.menu === "All" || p.menu === activeFilters.menu;
-      return searchMatch && menuMatch;
+      const submenuMatch = activeFilters.submenu === "All" || p.submenu === activeFilters.submenu;
+      const typeMatch = activeFilters.type === "All" || p.type === activeFilters.type;
+      return searchMatch && menuMatch && submenuMatch && typeMatch;
     });
   }, [products, searchQuery, activeFilters]);
 
+  // Handle Quick Add Modal Opening
   const openQuickAdd = (item: any) => {
     const availableColors = item.color ? item.color.split(',').map((c:string) => c.trim()).filter(Boolean) : [];
     const availableSizes = item.size ? item.size.split(',').map((s:string) => s.trim()).filter(Boolean) : [];
@@ -186,7 +201,32 @@ export default function PremiumStorefront() {
         status: "pending_payment", createdAt: new Date().toISOString()
       };
       
+      // 1. Sync to Firebase Command Center
       await addDoc(collection(db, "orders"), payload);
+      
+      // 2. Telegram Neural Link Integration (Direct Push)
+      // Replace YOUR_BOT_TOKEN and YOUR_CHAT_ID with your actual Telegram bot credentials.
+      try {
+        const tgBotToken = "YOUR_BOT_TOKEN"; 
+        const tgChatId = "YOUR_CHAT_ID"; 
+        
+        if (tgBotToken !== "YOUR_BOT_TOKEN") {
+          const tgMessage = `🚨 *NEW PIPELINE ORDER* 🚨\n\n` +
+                            `👤 *Client:* ${payload.customerName}\n` +
+                            `📞 *Phone:* ${payload.phone}\n` +
+                            `💰 *Total Yield:* ${payload.totalAmount.toLocaleString()} ETB\n` +
+                            `🚚 *Type:* ${payload.deliveryType}\n\n` +
+                            `Log into the Command Center to process this order.`;
+
+          await fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: tgChatId, text: tgMessage, parse_mode: 'Markdown' })
+          });
+        }
+      } catch (tgError) {
+        console.warn("Telegram push skipped or failed.", tgError);
+      }
       
       setCartItems([]); setIsCartOpen(false); setCheckoutStep(1);
       setToast({ show: true, msg: "Order Dispatched to Command Center successfully!" });
@@ -217,6 +257,14 @@ export default function PremiumStorefront() {
     } catch (error) { setAiHistory(prev => [...prev, {role: 'ai', text: "Neural link disrupted. Please try again."}]); } finally { setIsAiTyping(false); }
   };
 
+  const renderSlogan = () => {
+    const parts = systemSettings.slogan.split('.');
+    if (parts.length < 2) return <>{systemSettings.slogan}</>;
+    return (
+      <>{parts[0]}. <br /><span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(to right, var(--text-main), var(--accent))' }}>{parts.slice(1).join('.').trim()}</span></>
+    );
+  };
+
   const activeAds = marketingAssets.filter(ad => ad.active);
   const heroAds = activeAds.filter(ad => ad.placement === 'hero');
   const floatingAds = activeAds.filter(ad => ad.placement === 'floating');
@@ -242,7 +290,6 @@ export default function PremiumStorefront() {
 
   return (
     <div className="relative min-h-screen font-sans scroll-smooth overflow-x-hidden" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-main)' }}>
-      {/* INFINITE MARQUEE CSS INJECTION */}
       <style jsx global>{`
         input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
@@ -253,7 +300,6 @@ export default function PremiumStorefront() {
       <div className="fixed top-[-20%] left-[-10%] w-[50rem] h-[50rem] pointer-events-none transform-gpu" style={{ background: 'radial-gradient(circle, var(--accent) 0%, transparent 60%)', opacity: 0.12 }} />
       <div className="fixed bottom-[-10%] right-[-5%] w-[40rem] h-[40rem] pointer-events-none transform-gpu opacity-10" style={{ background: 'radial-gradient(circle, #059669 0%, transparent 60%)' }} />
 
-      {/* --- JIJI-STYLE HEADER --- */}
       <header className={`fixed top-0 w-full z-40 transition-colors duration-300 border-b transform-gpu ${scrolled ? 'bg-black/90 py-2 md:py-3 border-white/10 shadow-2xl backdrop-blur-md' : 'bg-[#0A0A0F]/90 py-3 md:py-5 border-white/5 backdrop-blur-sm'}`}>
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 flex flex-col md:flex-row md:items-center gap-3 md:gap-0 justify-between">
           <div className="flex items-center justify-between w-full md:w-auto">
@@ -286,7 +332,6 @@ export default function PremiumStorefront() {
           </div>
         </div>
 
-        {/* --- HORIZONTAL CATEGORY PILLS (JIJI STYLE) --- */}
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 mt-3 md:mt-4">
            <div className="flex overflow-x-auto gap-2 pb-2 scrollbar-hide snap-x">
              <button onClick={() => setActiveFilters({menu: 'All', submenu: 'All', type: 'All'})} className={`snap-start flex-shrink-0 px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold transition-colors whitespace-nowrap border ${activeFilters.menu === 'All' ? 'bg-emerald-500 text-black border-emerald-500' : 'bg-[#111111] text-gray-300 border-white/10 hover:bg-white/10'}`}>All Materials</button>
@@ -299,7 +344,6 @@ export default function PremiumStorefront() {
 
       <div className="pt-32 md:pt-40"></div>
 
-      {/* --- FLOATING ORB AD --- */}
       {floatingAd && (
         <div className="hidden lg:block fixed top-1/3 left-6 z-30 pointer-events-auto group">
           <div className="relative w-20 h-20 rounded-[40%_60%_70%_30%/40%_50%_60%_50%] border-4 border-indigo-500/20 shadow-[0_0_40px_rgba(79,70,229,0.3)] overflow-hidden transition-all duration-700 hover:w-64 hover:h-64 hover:rounded-[2rem] hover:border-emerald-500 hover:shadow-[0_0_50px_rgba(16,185,129,0.5)] cursor-pointer bg-black">
@@ -309,7 +353,6 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- HERO PANORAMIC AD --- */}
       {heroAd && (
         <div className="w-full max-w-[1400px] mx-auto px-4 md:px-6 mb-6">
           <div className="relative w-full h-24 md:h-32 lg:h-40 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl overflow-hidden group bg-[#111111]">
@@ -320,13 +363,11 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- MARQUEE SLIDING TICKER AD --- */}
       {marqueeAds.length > 0 && (
         <div className="w-full bg-emerald-500/5 border-y border-emerald-500/20 py-2 md:py-3 overflow-hidden flex relative mb-6">
           <div className="absolute left-0 top-0 bottom-0 w-12 md:w-32 bg-gradient-to-r from-[#050505] to-transparent z-10 pointer-events-none" />
           <div className="absolute right-0 top-0 bottom-0 w-12 md:w-32 bg-gradient-to-l from-[#050505] to-transparent z-10 pointer-events-none" />
           <div className="animate-marquee flex gap-4 md:gap-8 items-center min-w-max px-4">
-            {/* Duplicate array heavily to ensure it spans ultra-wide screens seamlessly */}
             {[...marqueeAds, ...marqueeAds, ...marqueeAds, ...marqueeAds, ...marqueeAds].map((ad, i) => (
               <div key={i} className="flex items-center gap-3 bg-[#111111] pr-4 rounded-full border border-white/5 shadow-lg overflow-hidden h-8 md:h-10">
                 <AdMedia asset={ad} className="h-full w-20 md:w-24 object-cover" />
@@ -345,7 +386,6 @@ export default function PremiumStorefront() {
         ) : catalogMixedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 opacity-50 border border-dashed border-white/10 rounded-2xl bg-[#111111]"><PackageSearch size={48} className="mb-4 opacity-30" /><p className="text-sm md:text-base font-bold">No materials match this configuration.</p></div>
         ) : (
-          // --- JIJI-STYLE ULTRA DENSE GRID ---
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4 grid-flow-row-dense">
             {catalogMixedItems.map((item, i) => {
               if (!item.isAd) {
@@ -367,7 +407,6 @@ export default function PremiumStorefront() {
                   </div>
                 );
               } else {
-                // Ads flow smoothly within the grid
                 return (
                   <div key={`ad-${i}`} className="col-span-2 row-span-1 rounded-xl overflow-hidden shadow-2xl border border-indigo-500/20 group transition-all duration-700 bg-black min-h-[120px]">
                     <AdMedia asset={item.data} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-transform duration-1000 group-hover:scale-105" />
@@ -380,7 +419,6 @@ export default function PremiumStorefront() {
         )}
       </section>
 
-      {/* --- FOOTER DOME AD --- */}
       {footerAd && (
         <div className="w-full relative h-[25vh] md:h-[35vh] overflow-hidden rounded-t-[50%] border-t border-white/10 shadow-[0_-20px_50px_rgba(255,255,255,0.05)] mt-10">
           <AdMedia asset={footerAd} className="w-full h-full object-cover" />
@@ -392,7 +430,6 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- QUICK ADD CONFIGURATOR (ON-THE-GO BOTTOM SHEET) --- */}
       {quickAddProduct && (
         <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setQuickAddProduct(null)} />
@@ -421,7 +458,7 @@ export default function PremiumStorefront() {
                 {quickAddProduct.color && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Color</label>
-                    <select value={qaColor} onChange={(e) => setQaColor(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
+                    <select value={qaColor} onChange={(e) => setQaColor(e.target.value)} className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
                       {quickAddProduct.color.split(',').map((c:string) => c.trim()).filter(Boolean).map((c:string) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
@@ -429,7 +466,7 @@ export default function PremiumStorefront() {
                 {quickAddProduct.size && (
                   <div>
                     <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Size</label>
-                    <select value={qaSize} onChange={(e) => setQaSize(e.target.value)} className="w-full bg-black border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
+                    <select value={qaSize} onChange={(e) => setQaSize(e.target.value)} className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2.5 text-xs outline-none focus:border-emerald-500">
                       {quickAddProduct.size.split(',').map((s:string) => s.trim()).filter(Boolean).map((s:string) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
@@ -438,10 +475,10 @@ export default function PremiumStorefront() {
 
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest opacity-50 block mb-1">Total Quantity</label>
-                <div className="flex items-center bg-black border border-white/10 rounded-xl p-1">
-                   <button onClick={() => setQaQty(prev => Math.max(1, (typeof prev==='number'?prev:1) - 1))} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-white/5 rounded-lg">-</button>
+                <div className="flex items-center bg-[#111111] border border-white/10 rounded-xl p-1">
+                   <button onClick={() => setQaQty(prev => Math.max(1, (typeof prev==='number'?prev:1) - 1))} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-black/50 rounded-lg">-</button>
                    <input type="number" value={qaQty} onChange={(e) => setQaQty(e.target.value === "" ? "" : parseInt(e.target.value))} onBlur={() => {if(qaQty==="" || (typeof qaQty==='number'&&qaQty<1) || isNaN(Number(qaQty))) setQaQty(1)}} className="flex-1 bg-transparent text-center font-black text-lg outline-none" style={{ MozAppearance: 'textfield' }} />
-                   <button onClick={() => setQaQty(prev => (typeof prev==='number'?prev:1) + 1)} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-white/5 rounded-lg">+</button>
+                   <button onClick={() => setQaQty(prev => (typeof prev==='number'?prev:1) + 1)} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white bg-black/50 rounded-lg">+</button>
                 </div>
               </div>
               
@@ -453,8 +490,6 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- NON-BLOCKING FLOATING SMART CART PILL --- */}
-      {/* Notice pointer-events-none on the container so user can click the grid behind it */}
       {cartItems.length > 0 && !isCartOpen && !quickAddProduct && (
         <div className="fixed bottom-6 w-full pointer-events-none z-50 flex justify-center px-4 animate-in slide-in-from-bottom-10 fade-in duration-500">
            <button onClick={() => setIsCartOpen(true)} className="pointer-events-auto bg-emerald-500/90 backdrop-blur-md text-black px-6 py-3 rounded-full font-black shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-center gap-4 hover:bg-emerald-400 transition-transform active:scale-95 border border-emerald-400 whitespace-nowrap">
@@ -468,7 +503,6 @@ export default function PremiumStorefront() {
         </div>
       )}
 
-      {/* --- CART DRAWER --- */}
       <div className={`fixed inset-0 z-[80] transition-all duration-500 ${isCartOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div onClick={() => {setIsCartOpen(false); setCheckoutStep(1);}} className={`absolute inset-0 bg-black/80 transition-opacity duration-300 ${isCartOpen ? 'opacity-100' : 'opacity-0'}`} />
         <div className={`absolute top-0 right-0 h-full w-full md:w-[500px] bg-[#050505] border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-out flex flex-col ${isCartOpen ? 'translate-x-0' : 'translate-x-full'}`}>
