@@ -100,7 +100,6 @@ export default function AdminCommandCenter() {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // FIREBASE ERROR BOUNDARY
     const handleDbError = (err: any) => {
       console.error("Firebase Auth/Rules Error:", err);
       setToast({ show: true, msg: "Database connection blocked. Update Firebase Rules.", type: "error" });
@@ -273,6 +272,16 @@ export default function AdminCommandCenter() {
     catch { showToast("Failed to purge.", "error"); } finally { setIsDeleting(null); }
   };
 
+  // --- NEW: ORDER PURGE LOGIC ---
+  const deleteOrder = async (id: string) => {
+    if (!window.confirm("WARNING: Purge this order permanently from the pipeline?")) return;
+    try { 
+      await deleteDoc(doc(db, "orders", id)); 
+      showToast("Order purged."); 
+      setIsOrderDrawerOpen(false);
+    } catch { showToast("Failed to purge order.", "error"); }
+  };
+
   const openOrderMenu = (order: any) => { setSelectedOrder(order); setDispatchInfo(order.dispatchInfo || { driverName: "", driverPhone: "", vehiclePlate: "" }); setIsOrderDrawerOpen(true); };
 
   const updateOrderStatus = async (id: string, newStatus: string) => {
@@ -352,6 +361,7 @@ export default function AdminCommandCenter() {
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full">
         
+        {/* --- INVENTORY TAB (REMAINS THE SAME) --- */}
         {activeTab === "inventory" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -458,7 +468,7 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- UPGRADED MARKETING & ADS TAB --- */}
+        {/* --- MARKETING & ADS TAB --- */}
         {activeTab === "marketing" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -568,7 +578,7 @@ export default function AdminCommandCenter() {
       {/* ========================================================= */}
       
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-[110] flex justify-end">
           <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
           <div className="relative h-full w-full md:w-[600px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right-full">
             <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
@@ -651,7 +661,6 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
 
-                {/* --- CUSTOM LENGTH ENGINE --- */}
                 <div className="p-4 rounded-xl border border-yellow-500/20 bg-yellow-900/10 space-y-4">
                   <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-yellow-400 border-b border-yellow-500/20 pb-2 flex items-center gap-2"><Scissors size={14}/> Custom Cut Engine</h3>
                   <div className="pt-2 space-y-4">
@@ -669,7 +678,6 @@ export default function AdminCommandCenter() {
                   </div>
                 </div>
 
-                {/* --- SIZE AND COLOR CONFIGURATORS --- */}
                 <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-900/10 space-y-4">
                   <h3 className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-indigo-400 border-b border-indigo-500/20 pb-2">Dropdown Options (Optional)</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -761,7 +769,7 @@ export default function AdminCommandCenter() {
         </div>
       )}
 
-      {/* --- ORDER DRAWER REMAINS SAME --- */}
+      {/* --- UPGRADED ORDER DRAWER WITH PURGE BUTTON --- */}
       {isOrderDrawerOpen && selectedOrder && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div onClick={() => setIsOrderDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
@@ -774,9 +782,12 @@ export default function AdminCommandCenter() {
                   <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded opacity-50 flex items-center gap-1"><Clock size={10}/> {formatDate(selectedOrder?.createdAt)}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 md:gap-4">
+                <button onClick={() => deleteOrder(selectedOrder.id)} className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors" title="Purge Order">
+                  <Trash2 size={18} />
+                </button>
                 <button onClick={() => setShowProforma(true)} className="flex items-center gap-2 px-3 py-2 bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors">
-                  <Printer size={14} /> Generate Proforma
+                  <Printer size={14} /> <span className="hidden md:inline">Generate Proforma</span>
                 </button>
                 <button onClick={() => setIsOrderDrawerOpen(false)} className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-50 hover:opacity-100"><X size={20} /></button>
               </div>
