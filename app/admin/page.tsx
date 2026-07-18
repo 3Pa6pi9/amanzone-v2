@@ -360,7 +360,6 @@ export default function AdminCommandCenter() {
 
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 pt-24 lg:pt-8 w-full">
         
-        {/* --- INVENTORY TAB --- */}
         {activeTab === "inventory" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -467,7 +466,7 @@ export default function AdminCommandCenter() {
           </div>
         )}
 
-        {/* --- MARKETING & ADS TAB --- */}
+        {/* --- UPGRADED MARKETING & ADS TAB --- */}
         {activeTab === "marketing" && (
           <div className="animate-in fade-in duration-300">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 md:mb-8">
@@ -577,7 +576,7 @@ export default function AdminCommandCenter() {
       {/* ========================================================= */}
       
       {isDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-[110] flex justify-end">
           <div onClick={() => setIsDrawerOpen(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in" />
           <div className="relative h-full w-full md:w-[600px] bg-[#0A0A0F] border-l border-white/10 shadow-2xl flex flex-col animate-in slide-in-from-right-full">
             <div className="p-4 md:p-6 border-b border-white/10 flex justify-between items-center bg-black/40">
