@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy, doc, getDoc, addDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, doc, getDoc, addDoc, where } from "firebase/firestore";
 import { useTheme, useLanguage } from "@/lib/Providers";
 import { 
   ArrowRight, ShoppingCart, PackageSearch, X, Loader2, Trash2, 
   Image as ImageIcon, Search, CheckCircle2, ChevronDown, ChevronRight, 
   MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu, Mail,
-  MessageSquare, Send, Scissors, Plus, Sun, Moon, LogIn, UserPlus, ShieldCheck
+  MessageSquare, Send, Scissors, Plus, Sun, Moon, LogIn, UserPlus, ShieldCheck, Clock
 } from "lucide-react";
 
 const PREDEFINED_MATRIX: Record<string, string[]> = {
@@ -27,6 +27,26 @@ const PREDEFINED_MATRIX: Record<string, string[]> = {
 const initialSettingsState = {
   companyName: "AmanZone Trading PLC", slogan: "Industrial Grade. Delivered.", logoUrl: "",
   phone: "", email: "", address: "Addis Ababa, Ethiopia", taxRate: 15, deliveryBaseFee: 250, aiEnabled: true
+};
+
+const formatDate = (val: any) => {
+  if (!val) return "N/A";
+  try {
+    if (val.toDate) return val.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const date = new Date(val);
+    if (isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return "N/A"; }
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) { 
+    case 'pending_payment': return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'; 
+    case 'processing': return 'text-blue-500 bg-blue-500/10 border-blue-500/20'; 
+    case 'dispatched': return 'text-purple-500 bg-purple-500/10 border-purple-500/20'; 
+    case 'delivered': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'; 
+    default: return 'text-gray-500 bg-gray-500/10 border-gray-500/20'; 
+  }
 };
 
 const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
@@ -85,6 +105,9 @@ export default function PremiumStorefront() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [authForm, setAuthForm] = useState({ name: "", phone: "", password: "", companyName: "", tinNumber: "" });
+  
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [clientOrders, setClientOrders] = useState<any[]>([]);
 
   const ethiopianRegions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "Sidama", "SNNPR", "Somali", "Afar", "Benishangul-Gumuz", "Gambela", "Harari", "Dire Dawa"];
   const addisSubcities = ["Bole", "Yeka", "Nifas Silk-Lafto", "Kirkos", "Kolfe Keranio", "Lideta", "Gulele", "Addis Ketema", "Akaky Kaliti", "Arada", "Lemi Kura"];
@@ -120,6 +143,20 @@ export default function PremiumStorefront() {
 
     return () => { unsubscribe(); unsubMarketing(); unsubSettings(); };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.phone) {
+      setClientOrders([]);
+      return;
+    }
+    const qUser = query(collection(db, "orders"), where("phone", "==", currentUser.phone));
+    const unsubOrders = onSnapshot(qUser, (snapshot) => {
+      const ords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      ords.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setClientOrders(ords);
+    });
+    return () => unsubOrders();
+  }, [currentUser]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiHistory, isAiTyping]);
 
@@ -219,6 +256,7 @@ export default function PremiumStorefront() {
     localStorage.removeItem("az_client_user");
     setCurrentUser(null);
     setFormData({ name: "", phone: "", region: "Addis Ababa", subCity: "", address: "", companyName: "", tinNumber: "", requireVat: false });
+    setIsDashboardOpen(false);
     setToast({ show: true, msg: "Session revoked." });
     setTimeout(() => setToast({ show: false, msg: "" }), 3000);
   };
@@ -237,9 +275,11 @@ export default function PremiumStorefront() {
       
       await addDoc(collection(db, "orders"), payload);
       
+      // 📡 LIVE TELEGRAM NEURAL LINK
       try {
         const tgBotToken = "8901674777:AAFJU1bLmXWXY2E0Ozgx2CY-zdgwW4jt6pw"; 
-        const tgChatId = "YOUR_CHAT_ID"; 
+        const tgChatId = "650359151"; // Brother's Authenticated ID
+        
         if (tgChatId !== "YOUR_CHAT_ID") {
           const tgMessage = `🚨 *NEW PIPELINE ORDER* 🚨\n\n` +
                             `👤 *Client:* ${payload.customerName}\n` +
@@ -254,7 +294,9 @@ export default function PremiumStorefront() {
             body: JSON.stringify({ chat_id: tgChatId, text: tgMessage, parse_mode: 'Markdown' })
           });
         }
-      } catch (tgError) {}
+      } catch (tgError) {
+        console.warn("Telegram API failed to dispatch", tgError);
+      }
       
       setCartItems([]); setIsCartOpen(false); setCheckoutStep(1);
       setToast({ show: true, msg: "Order Dispatched to Command Center successfully!" });
@@ -287,13 +329,11 @@ export default function PremiumStorefront() {
 
   const activeAds = marketingAssets.filter(ad => ad.active);
   const heroAds = activeAds.filter(ad => ad.placement === 'hero');
-  const floatingAds = activeAds.filter(ad => ad.placement === 'floating');
   const footerAds = activeAds.filter(ad => ad.placement === 'footer');
   const inlineAds = activeAds.filter(ad => ad.placement === 'inline' || !ad.placement);
   const marqueeAds = activeAds.filter(ad => ad.placement === 'marquee');
 
   const heroAd = heroAds.length > 0 ? heroAds[0] : null;
-  const floatingAd = floatingAds.length > 0 ? floatingAds[0] : null;
   const footerAd = footerAds.length > 0 ? footerAds[0] : null;
 
   const catalogMixedItems: any[] = [];
@@ -334,7 +374,7 @@ export default function PremiumStorefront() {
               </button>
               
               {currentUser ? (
-                <button onClick={handleClientLogout} className="md:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase truncate max-w-[120px]">
+                <button onClick={() => setIsDashboardOpen(true)} className="md:hidden flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase truncate max-w-[120px]">
                   <ShieldCheck size={12}/> {currentUser.name}
                 </button>
               ) : (
@@ -358,7 +398,7 @@ export default function PremiumStorefront() {
             <button onClick={() => setIsTrackingOpen(true)} className="hover:text-emerald-500 transition-colors">{t("Track Route", "ትዕዛዝ ተከታተል")}</button>
             
             {currentUser ? (
-              <button onClick={handleClientLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider text-[10px] hover:bg-emerald-500 hover:text-black transition-colors">
+              <button onClick={() => setIsDashboardOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider text-[10px] hover:bg-emerald-500 hover:text-black transition-colors">
                 <ShieldCheck size={14}/> {currentUser.name}
               </button>
             ) : (
@@ -497,6 +537,71 @@ export default function PremiumStorefront() {
                 {authMode === "signup" ? "Already have a matrix signature? Log In" : "Need to establish corporate registration? Sign Up"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isDashboardOpen && currentUser && (
+        <div className="fixed inset-0 z-[100] flex justify-end animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsDashboardOpen(false)} />
+          <div className={`relative h-full w-full md:w-[480px] shadow-2xl flex flex-col ${isDarkMode ? 'bg-[#050505] border-l border-white/10 text-white' : 'bg-gray-50 border-l border-gray-200 text-gray-900'} animate-in slide-in-from-right-full`}>
+            
+            <div className={`p-5 md:p-6 border-b flex justify-between items-start ${isDarkMode ? 'border-white/10 bg-black/40' : 'border-gray-200 bg-white'}`}>
+              <div>
+                <h2 className="text-lg md:text-xl font-black tracking-tight flex items-center gap-2"><ShieldCheck className="text-emerald-500"/> Corporate Dashboard</h2>
+                <p className="text-[10px] md:text-xs opacity-60 mt-1 uppercase tracking-widest">Logged in as {currentUser.name}</p>
+              </div>
+              <button onClick={() => setIsDashboardOpen(false)} className="p-2 rounded-full opacity-50 hover:opacity-100 transition-colors"><X size={18}/></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-6">
+              
+              <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
+                <h3 className="text-[10px] font-black uppercase tracking-widest opacity-50 border-b pb-2 mb-3">Identity Matrix</h3>
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div><p className="opacity-50 mb-0.5">Phone</p><p className="font-bold">{currentUser.phone}</p></div>
+                  {currentUser.companyName && <div><p className="opacity-50 mb-0.5">Company</p><p className="font-bold truncate">{currentUser.companyName}</p></div>}
+                  {currentUser.tinNumber && <div><p className="opacity-50 mb-0.5">TIN</p><p className="font-mono font-bold tracking-widest text-emerald-500">{currentUser.tinNumber}</p></div>}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-3 ml-1">Pipeline History ({clientOrders.length})</h3>
+                {clientOrders.length === 0 ? (
+                  <div className={`flex flex-col items-center justify-center p-8 rounded-xl border border-dashed opacity-50 ${isDarkMode ? 'border-white/20' : 'border-gray-300'}`}>
+                    <Activity size={32} className="mb-2 opacity-40"/>
+                    <p className="text-xs font-bold">No active pipelines found.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {clientOrders.map(order => (
+                      <div key={order.id} className={`p-3.5 rounded-xl border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200 shadow-sm'}`}>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="text-[10px] font-mono opacity-60 mb-0.5">{order.id}</p>
+                            <p className="text-[10px] font-bold flex items-center gap-1"><Clock size={10}/> {formatDate(order.createdAt)}</p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${getStatusColor(order.status || 'pending')}`}>
+                            {(order.status || "pending").replace("_", " ")}
+                          </span>
+                        </div>
+                        <div className={`mt-2 pt-2 border-t flex justify-between items-center ${isDarkMode ? 'border-white/5' : 'border-gray-100'}`}>
+                          <p className="text-[10px] opacity-60">{order.items?.length || 0} Assets Deployed</p>
+                          <p className="text-sm font-black text-emerald-500">{(order.totalAmount || 0).toLocaleString()} ETB</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={`p-5 md:p-6 border-t ${isDarkMode ? 'border-white/10 bg-black/60' : 'border-gray-200 bg-white shadow-[0_-10px_30px_rgba(0,0,0,0.05)]'}`}>
+               <button onClick={handleClientLogout} className="w-full py-3.5 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 font-black uppercase tracking-widest text-xs transition-colors flex items-center justify-center gap-2">
+                 Log Out Session
+               </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -672,6 +777,36 @@ export default function PremiumStorefront() {
           )}
         </div>
       </div>
+
+      <div className={`fixed bottom-4 md:bottom-6 right-4 md:right-6 z-[70] w-[calc(100vw-2rem)] md:w-96 bg-[#0A0A0F] border border-indigo-500/30 rounded-3xl shadow-2xl flex flex-col transition-all duration-300 origin-bottom-right ${isAiOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`} style={{ height: '460px', maxHeight: '75vh' }}>
+        <div className="p-3 border-b border-indigo-500/30 flex justify-between items-center bg-indigo-900/20 rounded-t-3xl">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-indigo-500 flex items-center justify-center shadow-lg"><Activity size={14} /></div>
+            <div><h3 className="font-black text-xs text-indigo-100">AmanZone AI</h3></div>
+          </div>
+          <button onClick={() => setIsAiOpen(false)} className="p-1.5 text-indigo-300 hover:text-white"><X size={16} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3.5 scrollbar-hide bg-black/40">
+          {aiHistory.map((msg, idx) => (
+            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] p-2.5 rounded-xl text-xs ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white/10 text-gray-200 border border-white/5 rounded-bl-sm'}`}>{msg.text}</div>
+            </div>
+          ))}
+          {isAiTyping && (
+            <div className="flex justify-start"><div className="bg-white/10 p-2.5 rounded-xl rounded-bl-sm border border-white/5 flex items-center gap-1"><span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span><span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span></div></div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+        <form onSubmit={handleAiSubmit} className="p-2 border-t border-white/10 bg-[#0A0A0F] rounded-b-3xl flex gap-1.5">
+          <input type="text" placeholder="Query warehouse allocation matrix..." value={aiMessage} onChange={(e) => setAiMessage(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 outline-none focus:border-indigo-500 text-xs" />
+          <button disabled={isAiTyping} type="submit" className="p-2.5 rounded-lg bg-indigo-600 text-white disabled:opacity-50"><Send size={15} /></button>
+        </form>
+      </div>
+
+      <div className="fixed bottom-4 right-4 z-40 flex flex-col gap-2">
+        {systemSettings.aiEnabled && <button onClick={() => setIsAiOpen(true)} className="p-3 rounded-full bg-indigo-600 text-white shadow-xl hover:scale-105 transition-transform"><MessageSquare size={18} /></button>}
+      </div>
+
     </div>
   );
 }
