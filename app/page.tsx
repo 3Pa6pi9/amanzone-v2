@@ -11,6 +11,15 @@ import {
   MessageSquare, Send, Scissors, Plus, Sun, Moon, LogIn, UserPlus, ShieldCheck, Clock
 } from "lucide-react";
 
+// Instant Load Image Optimizer (Cloudinary)
+const optimizeImg = (url: string) => {
+  if (!url) return "";
+  if (url.includes("res.cloudinary.com") && url.includes("/upload/")) {
+    return url.replace("/upload/", "/upload/w_500,q_auto,f_auto/");
+  }
+  return url;
+};
+
 const PREDEFINED_MATRIX: Record<string, string[]> = {
   "የግንባታ ብረት": ["የሀገር ውስጥ", "የቱርክ ብረት"],
   "ቆርቆሮ": ["መደበኛ ቆርቆሮ", "ኤጋ ቆርቆሮ", "ታይልስ ቆርቆሮ"],
@@ -54,17 +63,22 @@ const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
   return asset.type === 'video' ? (
     <video src={asset.url} autoPlay loop muted playsInline className={className} />
   ) : (
-    <img src={asset.url} alt="AmanZone Ad" loading="lazy" className={className} />
+    <img src={optimizeImg(asset.url)} alt="AmanZone Ad" loading="lazy" className={className} />
   );
 };
 
 export default function PremiumStorefront() {
   const { theme, setTheme } = useTheme();
+  
+  // FORCE AMHARIC DEFAULT LOCALLY
   const { language, setLanguage } = useLanguage();
   const t = (en: string, am: string) => (language === "EN" ? en : am);
+  
+  // Default to Light Mode per request
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [products, setProducts] = useState<any[]>([]);
-  const [shuffledProducts, setShuffledProducts] = useState<any[]>([]);
+  const [seedMap, setSeedMap] = useState<Map<string, number>>(new Map());
   const [marketingAssets, setMarketingAssets] = useState<any[]>([]);
   const [systemSettings, setSystemSettings] = useState<any>(initialSettingsState);
   const [loading, setLoading] = useState(true);
@@ -94,13 +108,12 @@ export default function PremiumStorefront() {
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [aiMessage, setAiMessage] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
-  const [aiHistory, setAiHistory] = useState<{role: 'user'|'ai', text: string}[]>([{role: 'ai', text: "Hello! I am AmanZone AI. I have live access to our warehouse matrix. What materials are you looking for today?"}]);
+  const [aiHistory, setAiHistory] = useState<{role: 'user'|'ai', text: string}[]>([{role: 'ai', text: "ሰላም! እኔ የአማንዞን AI ረዳት ነኝ። ምን እየፈለጉ ነው?"}]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const [scrolled, setScrolled] = useState(false);
   const [toast, setToast] = useState<{ show: boolean, msg: string }>({ show: false, msg: "" });
 
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "signup">("signup");
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -112,6 +125,11 @@ export default function PremiumStorefront() {
   const ethiopianRegions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "Sidama", "SNNPR", "Somali", "Afar", "Benishangul-Gumuz", "Gambela", "Harari", "Dire Dawa"];
   const addisSubcities = ["Bole", "Yeka", "Nifas Silk-Lafto", "Kirkos", "Kolfe Keranio", "Lideta", "Gulele", "Addis Ketema", "Akaky Kaliti", "Arada", "Lemi Kura"];
 
+  // Ensure Amharic is set on load
+  useEffect(() => {
+    if (setLanguage) setLanguage("AM");
+  }, [setLanguage]);
+
   useEffect(() => {
     let ticking = false;
     const handleScroll = () => {
@@ -121,14 +139,27 @@ export default function PremiumStorefront() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // HYDRATION-SAFE LIVE SYNC ENGINE
   useEffect(() => {
     const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => { 
       const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProducts(fetched);
-      setShuffledProducts([...fetched].sort(() => Math.random() - 0.5));
+      
+      // Assign stable seeds for randomization. New items get pushed to the very top automatically!
+      setSeedMap(prev => {
+        const nextMap = new Map(prev);
+        fetched.forEach((p, index) => {
+          if (!nextMap.has(p.id)) {
+            // Negative timestamp ensures newly deployed items always appear at the top immediately
+            nextMap.set(p.id, index === 0 ? -Date.now() : Math.random());
+          }
+        });
+        return nextMap;
+      });
       setLoading(false); 
     }, () => setLoading(false));
+
     const unsubMarketing = onSnapshot(query(collection(db, "marketing"), orderBy("createdAt", "desc")), (snapshot) => { setMarketingAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))); });
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => { if (docSnap.exists()) setSystemSettings({ ...initialSettingsState, ...docSnap.data() }); });
     
@@ -145,10 +176,7 @@ export default function PremiumStorefront() {
   }, []);
 
   useEffect(() => {
-    if (!currentUser?.phone) {
-      setClientOrders([]);
-      return;
-    }
+    if (!currentUser?.phone) { setClientOrders([]); return; }
     const qUser = query(collection(db, "orders"), where("phone", "==", currentUser.phone));
     const unsubOrders = onSnapshot(qUser, (snapshot) => {
       const ords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -161,6 +189,11 @@ export default function PremiumStorefront() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiHistory, isAiTyping]);
 
   const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
+
+  // LIVE GRID RENDERER
+  const shuffledProducts = useMemo(() => {
+    return [...products].sort((a, b) => (seedMap.get(a.id) || 0) - (seedMap.get(b.id) || 0));
+  }, [products, seedMap]);
 
   const filteredProducts = useMemo(() => {
     return shuffledProducts.filter(p => {
@@ -275,28 +308,33 @@ export default function PremiumStorefront() {
       
       await addDoc(collection(db, "orders"), payload);
       
-      // 📡 LIVE TELEGRAM NEURAL LINK
+      // 📡 LIVE TELEGRAM MULTI-CAST NEURAL LINK
       try {
         const tgBotToken = "8901674777:AAFJU1bLmXWXY2E0Ozgx2CY-zdgwW4jt6pw"; 
-        const tgChatId = "650359151"; // Brother's Authenticated ID
         
-        if (tgChatId !== "YOUR_CHAT_ID") {
-          const tgMessage = `🚨 *NEW PIPELINE ORDER* 🚨\n\n` +
-                            `👤 *Client:* ${payload.customerName}\n` +
-                            `📞 *Phone:* ${payload.phone}\n` +
-                            `💰 *Total Yield:* ${payload.totalAmount.toLocaleString()} ETB\n` +
-                            `🚚 *Type:* ${payload.deliveryType}\n\n` +
-                            `Log into the Command Center to process this order.`;
+        // Brother's ID + Miracle's ID
+        const tgChatIds = ["650359151", "5649256586"]; 
+        
+        const tgMessage = `🚨 *NEW PIPELINE ORDER* 🚨\n\n` +
+                          `👤 *Client:* ${payload.customerName}\n` +
+                          `📞 *Phone:* ${payload.phone}\n` +
+                          `💰 *Total Yield:* ${payload.totalAmount.toLocaleString()} ETB\n` +
+                          `🚚 *Type:* ${payload.deliveryType}\n\n` +
+                          `Log into the Command Center to process this order.`;
 
-          await fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: tgChatId, text: tgMessage, parse_mode: 'Markdown' })
-          });
-        }
-      } catch (tgError) {
-        console.warn("Telegram API failed to dispatch", tgError);
-      }
+        const broadcastPromises = tgChatIds.map(chatId => {
+          if (chatId.trim() !== "") {
+            return fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: tgMessage, parse_mode: 'Markdown' })
+            }).catch(err => console.warn(`Failed sending to ${chatId}`, err));
+          }
+          return Promise.resolve();
+        });
+
+        await Promise.all(broadcastPromises);
+      } catch (tgError) { console.warn("Telegram API failed to dispatch", tgError); }
       
       setCartItems([]); setIsCartOpen(false); setCheckoutStep(1);
       setToast({ show: true, msg: "Order Dispatched to Command Center successfully!" });
@@ -412,7 +450,7 @@ export default function PremiumStorefront() {
         <div className={`border-t ${isDarkMode ? 'border-white/5 bg-black/40' : 'border-gray-200 bg-white'}`}>
           <div className="max-w-[1400px] mx-auto px-3 md:px-6 py-2">
              <div className="flex overflow-x-auto gap-1.5 pb-1 scrollbar-hide snap-x">
-               <button onClick={() => setActiveFilters({menu: 'All', submenu: 'All', type: 'All'})} className={`snap-start flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-wider transition-all border ${activeFilters.menu === 'All' ? 'bg-emerald-500 text-black border-emerald-500' : (isDarkMode ? 'bg-[#111111] text-gray-400 border-white/5 hover:bg-white/5' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200')}`}>All Materials</button>
+               <button onClick={() => setActiveFilters({menu: 'All', submenu: 'All', type: 'All'})} className={`snap-start flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-wider transition-all border ${activeFilters.menu === 'All' ? 'bg-emerald-500 text-black border-emerald-500' : (isDarkMode ? 'bg-[#111111] text-gray-400 border-white/5 hover:bg-white/5' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200')}`}>{t("All Materials", "ሁሉም እቃዎች")}</button>
                {uniqueMenus.map((menu:any) => (
                  <button key={menu} onClick={() => setActiveFilters({menu, submenu: 'All', type: 'All'})} className={`snap-start flex-shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] md:text-xs font-black uppercase tracking-wider transition-all border ${activeFilters.menu === menu ? 'bg-emerald-500 text-black border-emerald-500' : (isDarkMode ? 'bg-[#111111] text-gray-400 border-white/5 hover:bg-white/5' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200')}`}>{menu}</button>
                ))}
@@ -458,14 +496,14 @@ export default function PremiumStorefront() {
                 return (
                   <div key={product.id} onClick={() => openQuickAdd(product)} className={`col-span-1 border rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-all cursor-pointer group animate-in fade-in ${isDarkMode ? 'bg-[#111111] border-white/10 hover:border-emerald-500/50' : 'bg-white border-gray-200 hover:border-emerald-500'}`}>
                     <div className={`relative aspect-square overflow-hidden ${isDarkMode ? 'bg-black/50' : 'bg-gray-100'}`}>
-                       {product.imageUrl ? <img src={product.imageUrl} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102" alt="product"/> : <div className="w-full h-full flex items-center justify-center opacity-10"><ImageIcon size={20}/></div>}
+                       {product.imageUrl ? <img src={optimizeImg(product.imageUrl)} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102" alt="product"/> : <div className="w-full h-full flex items-center justify-center opacity-10"><ImageIcon size={20}/></div>}
                        {product.allowCustomSize && <span className="absolute top-1.5 left-1.5 bg-yellow-500 text-black text-[7px] font-black px-1.5 py-0.5 rounded shadow">CUT PER M</span>}
                     </div>
                     <div className="p-2.5 md:p-3 flex flex-col flex-1">
                        <p className="font-black text-emerald-500 text-xs md:text-base leading-none mb-1">{(parseFloat(product.price) || 0).toLocaleString()} <span className="text-[7px] md:text-[8px] opacity-60 font-medium">ETB</span></p>
                        <p className={`text-[10px] md:text-xs font-semibold line-clamp-2 leading-tight flex-1 ${isDarkMode ? 'text-white/90' : 'text-gray-800'}`}>{product.title}</p>
                        <div className="pt-2 mt-2 border-t border-gray-500/10 flex justify-between items-center text-[8px] md:text-[9px] opacity-40">
-                         <span className="truncate flex items-center gap-0.5 max-w-[70%]"><MapPin size={8}/> {product.warehouse || "Central Warehouse"}</span>
+                         <span className="truncate flex items-center gap-0.5 max-w-[70%]"><MapPin size={8}/> {product.warehouse || "Central"}</span>
                          <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-gray-700'} group-hover:bg-emerald-500 group-hover:text-black group-hover:border-emerald-500 transition-colors`}><Plus size={10}/></div>
                        </div>
                     </div>
@@ -504,6 +542,7 @@ export default function PremiumStorefront() {
         </div>
       )}
 
+      {/* --- AUTHENTICATION MODAL --- */}
       {isAuthOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setIsAuthOpen(false)} />
@@ -514,21 +553,21 @@ export default function PremiumStorefront() {
             
             <form onSubmit={handleClientAuth} className="space-y-3">
               {authMode === "signup" && (
-                <div><input type="text" required placeholder="Full Representative Name" value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10 text-white focus:border-emerald-500' : 'bg-gray-50 border border-gray-200 focus:border-emerald-500'}`} /></div>
+                <div><input type="text" required placeholder={t("Full Name", "ሙሉ ስም")} value={authForm.name} onChange={e => setAuthForm({...authForm, name: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10 text-white focus:border-emerald-500' : 'bg-gray-50 border border-gray-200 focus:border-emerald-500'}`} /></div>
               )}
-              <div><input type="tel" required placeholder="Phone Number (Username)" value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10 text-white focus:border-emerald-500' : 'bg-gray-50 border border-gray-200 focus:border-emerald-500'}`} /></div>
-              <div><input type="password" required placeholder="Secure Passcode" value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10 text-white focus:border-emerald-500' : 'bg-gray-50 border border-gray-200 focus:border-emerald-500'}`} /></div>
+              <div><input type="tel" required placeholder={t("Phone Number", "ስልክ ቁጥር")} value={authForm.phone} onChange={e => setAuthForm({...authForm, phone: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10 text-white focus:border-emerald-500' : 'bg-gray-50 border border-gray-200 focus:border-emerald-500'}`} /></div>
+              <div><input type="password" required placeholder={t("Passcode", "የይለፍ ቃል")} value={authForm.password} onChange={e => setAuthForm({...authForm, password: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10 text-white focus:border-emerald-500' : 'bg-gray-50 border border-gray-200 focus:border-emerald-500'}`} /></div>
               
               {authMode === "signup" && (
                 <>
                   <div className="border-t border-gray-500/10 my-2 pt-2"></div>
-                  <div><input type="text" placeholder="Corporate Title (Optional)" value={authForm.companyName} onChange={e => setAuthForm({...authForm, companyName: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10' : 'bg-gray-50 border border-gray-200'}`} /></div>
-                  <div><input type="text" maxLength={10} placeholder="TIN Number (Optional - 10 Digits)" value={authForm.tinNumber} onChange={e => setAuthForm({...authForm, tinNumber: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none font-mono ${isDarkMode ? 'bg-black border border-white/10' : 'bg-gray-50 border border-gray-200'}`} /></div>
+                  <div><input type="text" placeholder={t("Company Name (Optional)", "የኩባንያ ስም (አማራጭ)")} value={authForm.companyName} onChange={e => setAuthForm({...authForm, companyName: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none ${isDarkMode ? 'bg-black border border-white/10' : 'bg-gray-50 border border-gray-200'}`} /></div>
+                  <div><input type="text" maxLength={10} placeholder={t("TIN Number (Optional)", "የግብር ከፋይ መለያ ቁጥር")} value={authForm.tinNumber} onChange={e => setAuthForm({...authForm, tinNumber: e.target.value})} className={`w-full px-3 py-2.5 text-xs rounded-xl outline-none font-mono ${isDarkMode ? 'bg-black border border-white/10' : 'bg-gray-50 border border-gray-200'}`} /></div>
                 </>
               )}
 
               <button type="submit" className="w-full py-3 bg-emerald-500 text-black text-xs font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 mt-2">
-                {authMode === "signup" ? "Build Profile" : "Authenticate Signature"}
+                {authMode === "signup" ? t("Build Profile", "መለያ ፍጠር") : t("Authenticate Signature", "ግባ")}
               </button>
             </form>
 
@@ -541,6 +580,7 @@ export default function PremiumStorefront() {
         </div>
       )}
 
+      {/* --- DASHBOARD DRAWER --- */}
       {isDashboardOpen && currentUser && (
         <div className="fixed inset-0 z-[100] flex justify-end animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsDashboardOpen(false)} />
@@ -614,7 +654,7 @@ export default function PremiumStorefront() {
             
             <div className="flex gap-3 mb-4 border-b border-gray-500/10 pb-3">
                <div className="w-16 h-16 rounded-xl bg-black/30 border border-white/5 overflow-hidden flex-shrink-0">
-                 {quickAddProduct.imageUrl && <img src={quickAddProduct.imageUrl} className="w-full h-full object-cover" alt="img"/>}
+                 {quickAddProduct.imageUrl && <img src={optimizeImg(quickAddProduct.imageUrl)} className="w-full h-full object-cover" alt="img"/>}
                </div>
                <div className="flex-1 min-w-0 pr-4">
                  <h3 className="font-bold text-sm leading-tight mb-1 truncate">{quickAddProduct.title}</h3>
@@ -664,11 +704,12 @@ export default function PremiumStorefront() {
         </div>
       )}
 
+      {/* --- CART DRAWER LAYER --- */}
       <div className={`fixed inset-0 z-[80] transition-all duration-500 ${isCartOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div onClick={() => {setIsCartOpen(false); setCheckoutStep(1);}} className={`absolute inset-0 bg-black/80 transition-opacity duration-300 ${isCartOpen ? 'opacity-100' : 'opacity-0'}`} />
         <div className={`absolute top-0 right-0 h-full w-full md:w-[480px] shadow-2xl transform transition-transform duration-300 flex flex-col ${isCartOpen ? 'translate-x-0' : 'translate-x-full'} ${isDarkMode ? 'bg-[#050505] border-l border-white/10' : 'bg-white border-l border-gray-200 text-gray-900'}`}>
           <div className="p-4 border-b flex justify-between items-center bg-black/5">
-            <h2 className="text-sm md:text-base font-black uppercase tracking-widest flex items-center gap-2">{checkoutStep === 1 ? <><ShoppingCart size={15}/> {t("Logistics Pipeline", "የዕቃ ቅርጫት")}</> : <><FileText size={15}/> Settlement Directives</>}</h2>
+            <h2 className="text-sm md:text-base font-black uppercase tracking-widest flex items-center gap-2">{checkoutStep === 1 ? <><ShoppingCart size={15}/> {t("Logistics Pipeline", "የዕቃ ቅርጫት")}</> : <><FileText size={15}/> {t("Settlement Directives", "ትዕዛዝ ማረጋገጫ")}</>}</h2>
             <button onClick={() => {setIsCartOpen(false); setCheckoutStep(1);}} className="p-1.5 rounded-full opacity-50 hover:opacity-100"><X size={16} /></button>
           </div>
           
@@ -685,7 +726,7 @@ export default function PremiumStorefront() {
                         return (
                           <div key={item.cartItemId} className={`flex gap-3 items-center border p-2.5 rounded-xl ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`}>
                             <div className="w-12 h-12 rounded-lg bg-black/20 overflow-hidden flex-shrink-0">
-                              {item.imageUrl ? <img src={item.imageUrl} alt="img" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-2.5 opacity-20" />}
+                              {item.imageUrl ? <img src={optimizeImg(item.imageUrl)} alt="img" className="w-full h-full object-cover" /> : <ImageIcon className="w-full h-full p-2.5 opacity-20" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="font-bold text-xs truncate mb-0.5">{item.title}</h4>
@@ -720,8 +761,8 @@ export default function PremiumStorefront() {
               <div className="flex-1 overflow-y-auto p-4 scrollbar-hide space-y-5">
                 <div className="space-y-3">
                   <h3 className="text-[10px] font-black uppercase tracking-wider opacity-50 border-b pb-1">Representative Identity</h3>
-                  <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="text" required placeholder="Full Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-xl outline-none border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`} /></div>
-                  <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="tel" required placeholder="Active Phone (09...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-xl outline-none border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`} /></div>
+                  <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="text" required placeholder={t("Full Name", "ሙሉ ስም")} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-xl outline-none border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`} /></div>
+                  <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="tel" required placeholder={t("Phone Number", "ስልክ ቁጥር")} value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-xl outline-none border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`} /></div>
                   
                   <div className={`p-3 rounded-xl border space-y-3 ${isDarkMode ? 'bg-black/30 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
                     <label className="flex items-center gap-2.5 cursor-pointer">
@@ -730,8 +771,8 @@ export default function PremiumStorefront() {
                     </label>
                     {formData.requireVat && (
                       <div className="space-y-2.5 pt-1 animate-in fade-in">
-                        <div className="relative"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="text" required placeholder="Registered Corporate Identity" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-lg outline-none border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200'}`} /></div>
-                        <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="text" required placeholder="10-Digit TIN Registration" value={formData.tinNumber} onChange={e => setFormData({...formData, tinNumber: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-lg outline-none border font-mono tracking-widest ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200'}`} /></div>
+                        <div className="relative"><Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="text" required placeholder={t("Company Name", "የኩባንያ ስም")} value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-lg outline-none border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200'}`} /></div>
+                        <div className="relative"><FileText className="absolute left-3 top-1/2 -translate-y-1/2 opacity-40" size={14} /><input type="text" required placeholder={t("TIN Number", "የግብር ከፋይ መለያ ቁጥር")} value={formData.tinNumber} onChange={e => setFormData({...formData, tinNumber: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-lg outline-none border font-mono tracking-widest ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200'}`} /></div>
                       </div>
                     )}
                   </div>
@@ -755,7 +796,7 @@ export default function PremiumStorefront() {
                         <select required value={formData.subCity} onChange={e => setFormData({...formData, subCity: e.target.value})} className={`w-full pl-9 pr-4 py-2.5 text-xs rounded-xl outline-none border appearance-none ${isDarkMode ? 'bg-[#111111] border-white/10 text-white' : 'bg-gray-50 border-gray-200'}`}><option value="" disabled>Select Sub-City</option>{addisSubcities.map(sc => <option key={sc} value={sc}>{sc}</option>)}</select>
                       </div>
                     )}
-                    <textarea required placeholder="Specific site orientation coordinates or delivery landmarks..." rows={2.5} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className={`w-full p-3 text-xs rounded-xl outline-none border resize-none ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`}></textarea>
+                    <textarea required placeholder={t("Specific address or delivery landmarks...", "የሚላክበት አድራሻ ወይም ልዩ ቦታ...")} rows={2.5} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className={`w-full p-3 text-xs rounded-xl outline-none border resize-none ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-gray-50 border-gray-200'}`}></textarea>
                   </div>
                 )}
               </div>
@@ -769,7 +810,7 @@ export default function PremiumStorefront() {
                   <button type="button" onClick={() => setCheckoutStep(1)} className={`px-4 py-3 rounded-xl border text-xs font-bold ${isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white'}`}>Back</button>
                   <button type="submit" disabled={isCheckingOut} className="flex-1 py-3 bg-emerald-500 text-black font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-2">
                     {isCheckingOut ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />}
-                    {isCheckingOut ? "Syncing Directive..." : "Submit Order Pipeline"}
+                    {isCheckingOut ? "Syncing Directive..." : t("Submit Order Pipeline", "ትዕዛዝ አስተላልፍ")}
                   </button>
                 </div>
               </div>
