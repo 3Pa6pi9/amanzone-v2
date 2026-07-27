@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import Script from "next/script";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, query, orderBy, doc, getDoc, addDoc, where } from "firebase/firestore";
 import { useTheme, useLanguage } from "@/lib/Providers";
@@ -8,7 +9,7 @@ import {
   ArrowRight, ShoppingCart, PackageSearch, X, Loader2, Trash2, 
   Image as ImageIcon, Search, CheckCircle2, ChevronDown, ChevronRight, 
   MapPin, Phone, User, Truck, Building2, LocateFixed, Activity, Briefcase, FileText, Menu, Mail,
-  MessageSquare, Send, Scissors, Plus, Sun, Moon, LogIn, UserPlus, ShieldCheck, Clock
+  MessageSquare, Send, Scissors, Plus, Sun, Moon, LogIn, UserPlus, ShieldCheck, Clock, SlidersHorizontal
 } from "lucide-react";
 
 // Instant Load Image Optimizer (Cloudinary)
@@ -70,11 +71,11 @@ const AdMedia = ({ asset, className }: { asset: any, className?: string }) => {
 export default function PremiumStorefront() {
   const { theme, setTheme } = useTheme();
   
-  // FORCE AMHARIC DEFAULT LOCALLY
+  // FORCE AMHARIC DEFAULT
   const { language, setLanguage } = useLanguage();
   const t = (en: string, am: string) => (language === "EN" ? en : am);
   
-  // Default to Light Mode per request
+  // LIGHT MODE DEFAULT
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [products, setProducts] = useState<any[]>([]);
@@ -85,6 +86,8 @@ export default function PremiumStorefront() {
   const [searchQuery, setSearchQuery] = useState("");
   
   const [activeFilters, setActiveFilters] = useState({ menu: "All", submenu: "All", type: "All" });
+  const [sortMode, setSortMode] = useState<'newest' | 'price_asc' | 'price_desc'>('newest');
+  const [inStockOnly, setInStockOnly] = useState(false);
 
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -125,10 +128,7 @@ export default function PremiumStorefront() {
   const ethiopianRegions = ["Addis Ababa", "Oromia", "Amhara", "Tigray", "Sidama", "SNNPR", "Somali", "Afar", "Benishangul-Gumuz", "Gambela", "Harari", "Dire Dawa"];
   const addisSubcities = ["Bole", "Yeka", "Nifas Silk-Lafto", "Kirkos", "Kolfe Keranio", "Lideta", "Gulele", "Addis Ketema", "Akaky Kaliti", "Arada", "Lemi Kura"];
 
-  // Ensure Amharic is set on load
-  useEffect(() => {
-    if (setLanguage) setLanguage("AM");
-  }, [setLanguage]);
+  useEffect(() => { if (setLanguage) setLanguage("AM"); }, [setLanguage]);
 
   useEffect(() => {
     let ticking = false;
@@ -136,24 +136,32 @@ export default function PremiumStorefront() {
       if (!ticking) { window.requestAnimationFrame(() => { setScrolled(window.scrollY > 50); ticking = false; }); ticking = true; }
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
+
+    // Initialize Telegram WebApp if opened inside Telegram
+    setTimeout(() => {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) {
+        tg.expand();
+        if (tg.initDataUnsafe?.user && !currentUser) {
+           const tgUser = tg.initDataUnsafe.user;
+           setAuthForm(prev => ({...prev, name: tgUser.first_name, phone: tgUser.username || ""}));
+        }
+      }
+    }, 500);
+
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // HYDRATION-SAFE LIVE SYNC ENGINE
   useEffect(() => {
     const q = query(collection(db, "inventory"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => { 
       const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProducts(fetched);
       
-      // Assign stable seeds for randomization. New items get pushed to the very top automatically!
       setSeedMap(prev => {
         const nextMap = new Map(prev);
         fetched.forEach((p, index) => {
-          if (!nextMap.has(p.id)) {
-            // Negative timestamp ensures newly deployed items always appear at the top immediately
-            nextMap.set(p.id, index === 0 ? -Date.now() : Math.random());
-          }
+          if (!nextMap.has(p.id)) nextMap.set(p.id, index === 0 ? -Date.now() : Math.random());
         });
         return nextMap;
       });
@@ -190,18 +198,22 @@ export default function PremiumStorefront() {
 
   const uniqueMenus = useMemo(() => Array.from(new Set([...Object.keys(PREDEFINED_MATRIX), ...products.map(p => p.menu).filter(Boolean)])), [products]);
 
-  // LIVE GRID RENDERER
-  const shuffledProducts = useMemo(() => {
-    return [...products].sort((a, b) => (seedMap.get(a.id) || 0) - (seedMap.get(b.id) || 0));
-  }, [products, seedMap]);
+  // ADVANCED FILTERING AND SORTING ENGINE
+  const processedProducts = useMemo(() => {
+    let result = [...products].sort((a, b) => (seedMap.get(a.id) || 0) - (seedMap.get(b.id) || 0));
 
-  const filteredProducts = useMemo(() => {
-    return shuffledProducts.filter(p => {
+    result = result.filter(p => {
       const searchMatch = (p.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || (p.menu || "").toLowerCase().includes(searchQuery.toLowerCase());
       const menuMatch = activeFilters.menu === "All" || p.menu === activeFilters.menu;
-      return searchMatch && menuMatch;
+      const stockMatch = !inStockOnly || (parseInt(p.stock) > 0);
+      return searchMatch && menuMatch && stockMatch;
     });
-  }, [shuffledProducts, searchQuery, activeFilters]);
+
+    if (sortMode === 'price_asc') result.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+    if (sortMode === 'price_desc') result.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+
+    return result;
+  }, [products, seedMap, searchQuery, activeFilters, sortMode, inStockOnly]);
 
   const openQuickAdd = (item: any) => {
     const availableColors = item.color ? item.color.split(',').map((c:string) => c.trim()).filter(Boolean) : [];
@@ -306,13 +318,11 @@ export default function PremiumStorefront() {
         status: "pending_payment", createdAt: new Date().toISOString()
       };
       
-      await addDoc(collection(db, "orders"), payload);
+      const docRef = await addDoc(collection(db, "orders"), payload);
       
-      // 📡 LIVE TELEGRAM MULTI-CAST NEURAL LINK
+      // 📡 LIVE TELEGRAM MULTI-CAST NEURAL LINK WITH INLINE BUTTONS
       try {
         const tgBotToken = "8901674777:AAFJU1bLmXWXY2E0Ozgx2CY-zdgwW4jt6pw"; 
-        
-        // Brother's ID + Miracle's ID
         const tgChatIds = ["650359151", "5649256586"]; 
         
         const tgMessage = `🚨 *NEW PIPELINE ORDER* 🚨\n\n` +
@@ -320,14 +330,27 @@ export default function PremiumStorefront() {
                           `📞 *Phone:* ${payload.phone}\n` +
                           `💰 *Total Yield:* ${payload.totalAmount.toLocaleString()} ETB\n` +
                           `🚚 *Type:* ${payload.deliveryType}\n\n` +
-                          `Log into the Command Center to process this order.`;
+                          `Open Command Center to manage.`;
+
+        // Interactive Inline Keyboard Markup
+        const replyMarkup = {
+          inline_keyboard: [
+            [
+              { text: "🔄 Process", callback_data: `process_${docRef.id}` },
+              { text: "🚚 Dispatch", callback_data: `dispatch_${docRef.id}` }
+            ],
+            [
+              { text: "📂 Open Admin Panel", url: window.location.origin + "/admin" }
+            ]
+          ]
+        };
 
         const broadcastPromises = tgChatIds.map(chatId => {
           if (chatId.trim() !== "") {
             return fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: chatId, text: tgMessage, parse_mode: 'Markdown' })
+              body: JSON.stringify({ chat_id: chatId, text: tgMessage, parse_mode: 'Markdown', reply_markup: replyMarkup })
             }).catch(err => console.warn(`Failed sending to ${chatId}`, err));
           }
           return Promise.resolve();
@@ -377,7 +400,7 @@ export default function PremiumStorefront() {
   const catalogMixedItems: any[] = [];
   let inlineAdCount = 0;
   
-  filteredProducts.forEach((product, i) => {
+  processedProducts.forEach((product, i) => {
     catalogMixedItems.push({ isAd: false, data: product });
     if ((i + 1) % 6 === 0 && inlineAds.length > 0) {
       const ad = inlineAds[inlineAdCount % inlineAds.length];
@@ -388,6 +411,10 @@ export default function PremiumStorefront() {
 
   return (
     <div className={`relative min-h-screen font-sans scroll-smooth transition-colors duration-300 ${isDarkMode ? 'bg-[#050505] text-white' : 'bg-[#F4F6F9] text-gray-900'}`}>
+      
+      {/* Telegram Web App Native Script Integration */}
+      <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
+
       <style jsx global>{`
         @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
         .animate-marquee { animation: marquee 25s linear infinite; }
@@ -483,6 +510,19 @@ export default function PremiumStorefront() {
         </div>
       )}
 
+      {/* --- ADVANCED FILTER BAR --- */}
+      <div className="max-w-[1400px] mx-auto px-3 md:px-6 mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-bold">
+          <button onClick={() => setSortMode('newest')} className={`px-3 py-1.5 rounded-lg border ${sortMode === 'newest' ? 'bg-emerald-500 text-black border-emerald-500' : (isDarkMode ? 'bg-[#111111] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900')}`}><SlidersHorizontal size={12} className="inline mr-1"/> {t("Newest", "አዲስ እቃዎች")}</button>
+          <button onClick={() => setSortMode('price_asc')} className={`px-3 py-1.5 rounded-lg border ${sortMode === 'price_asc' ? 'bg-emerald-500 text-black border-emerald-500' : (isDarkMode ? 'bg-[#111111] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900')}`}>{t("Price: Low-High", "ዋጋ: ዝቅተኛ - ከፍተኛ")}</button>
+          <button onClick={() => setSortMode('price_desc')} className={`px-3 py-1.5 rounded-lg border ${sortMode === 'price_desc' ? 'bg-emerald-500 text-black border-emerald-500' : (isDarkMode ? 'bg-[#111111] border-white/10 text-white' : 'bg-white border-gray-200 text-gray-900')}`}>{t("Price: High-Low", "ዋጋ: ከፍተኛ - ዝቅተኛ")}</button>
+        </div>
+        <label className={`flex items-center gap-2 text-xs font-bold cursor-pointer p-1.5 rounded-lg border ${isDarkMode ? 'bg-[#111111] border-white/10' : 'bg-white border-gray-200'}`}>
+          <input type="checkbox" checked={inStockOnly} onChange={e => setInStockOnly(e.target.checked)} className="rounded text-emerald-500 w-4 h-4" />
+          {t("In Stock Only", "ያሉ እቃዎች ብቻ")}
+        </label>
+      </div>
+
       <section id="catalog" className="max-w-[1400px] mx-auto px-2 md:px-6 pb-40">
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 md:gap-3">{[1,2,3,4,5,6,7,8,9,10].map(n => <div key={n} className={`rounded-xl aspect-[4/5] animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-gray-200'}`} />)}</div>
@@ -503,7 +543,7 @@ export default function PremiumStorefront() {
                        <p className="font-black text-emerald-500 text-xs md:text-base leading-none mb-1">{(parseFloat(product.price) || 0).toLocaleString()} <span className="text-[7px] md:text-[8px] opacity-60 font-medium">ETB</span></p>
                        <p className={`text-[10px] md:text-xs font-semibold line-clamp-2 leading-tight flex-1 ${isDarkMode ? 'text-white/90' : 'text-gray-800'}`}>{product.title}</p>
                        <div className="pt-2 mt-2 border-t border-gray-500/10 flex justify-between items-center text-[8px] md:text-[9px] opacity-40">
-                         <span className="truncate flex items-center gap-0.5 max-w-[70%]"><MapPin size={8}/> {product.warehouse || "Central"}</span>
+                         <span className="truncate flex items-center gap-0.5 max-w-[70%]"><MapPin size={8}/> {product.warehouse || "Central Warehouse"}</span>
                          <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-gray-50 border-gray-200 text-gray-700'} group-hover:bg-emerald-500 group-hover:text-black group-hover:border-emerald-500 transition-colors`}><Plus size={10}/></div>
                        </div>
                     </div>
@@ -646,6 +686,7 @@ export default function PremiumStorefront() {
         </div>
       )}
 
+      {/* --- QUICK CONFIGURATOR BOTTOM SHEET --- */}
       {quickAddProduct && (
         <div className="fixed inset-0 z-[90] flex items-end md:items-center justify-center animate-in fade-in duration-200">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setQuickAddProduct(null)} />
